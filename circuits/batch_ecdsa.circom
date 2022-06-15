@@ -3,6 +3,7 @@ pragma circom 2.0.2;
 include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/multiplexer.circom";
 include "../node_modules/circomlib/circuits/poseidon.circom";
+include "../node_modules/circomlib/circuits/bitify.circom";
 
 include "bigint.circom";
 include "secp256k1.circom";
@@ -10,6 +11,14 @@ include "bigint_func.circom";
 include "ecdsa_func.circom";
 include "ecdsa.circom";
 include "secp256k1_func.circom";
+
+template Num2BitsFake(n) {
+    signal input in;
+    signal output out[n];
+    for (var i = 0; i<n; i++) {
+        out[i] <-- 1;
+    }
+}
 
 
 // r, s, msghash, and pubkey have coordinates
@@ -60,7 +69,30 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
             }
         }
     }
-    signal t <-- MultiHasher[b-1][k-1].out;
+    signal t;
+    t <-- MultiHasher[b-1][k-1].out;
+
+    component TPowersBits[b];
+    // contains t^0, t^1, ..., t^(b-1)
+    for (var i=0; i < b; i++) {
+        if (i == 0) {
+            // This is definitely wrong but NumToBits was giving me trouble
+            TPowersBits[i] = BigMultModP(n,k);
+            for (var j=0; j < k; j++) {
+                TPowersBits[i].a[j] <-- 1;
+                TPowersBits[i].b[j] <-- 1;
+                TPowersBits[i].p[j] <-- order[j];
+            }
+        } else {
+            // do big mult with t^1 and 
+            TPowersBits[i] = BigMultModP(n,k);
+            for (var j=0; j < k; j++) {
+                TPowersBits[i].a[j] <-- TPowersBits[0].out[j];
+                TPowersBits[i].b[j] <-- TPowersBits[i-1].out[j];
+                TPowersBits[i].p[j] <-- order[j];
+            }
+        }
+    }
 
     // Compute multiplicative inverse of s mod n for each signature
     for (var i = 0; i < b; i++) {
@@ -99,12 +131,23 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
-    // compute (h * sinv) * G for each signature
+    // compute t^i (h * sinv) mod n for each signature
+    component g_coeff_times_t[b];
+    for (var i = 0; i < b; i++) {
+        g_coeff_times_t[i] = BigMultModP(n, k);
+        for (var j = 0; j < k; j++) {
+            g_coeff_times_t[i].a[j] <-- g_coeff[i].out[j];
+            g_coeff_times_t[i].b[j] <-- TPowersBits[i].out[j];
+            g_coeff_times_t[i].p[j] <-- order[j];
+        }
+    }
+
+    // compute t^i (h * sinv) * G for each signature
     component g_mult[b];
     for (var i = 0; i < b; i++) {
         g_mult[i] = ECDSAPrivToPub(n, k);
         for (var j = 0; j < k; j++) {
-            g_mult[i].privkey[j] <-- g_coeff[i].out[j];
+            g_mult[i].privkey[j] <-- g_coeff_times_t[i].out[j];
         }
     }
 
@@ -119,12 +162,23 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
+    // compute t^i (h * sinv) mod n for each signature
+    component pubkey_coeff_times_t[b];
+    for (var i = 0; i < b; i++) {
+        pubkey_coeff_times_t[i] = BigMultModP(n, k);
+        for (var j = 0; j < k; j++) {
+            pubkey_coeff_times_t[i].a[j] <-- pubkey_coeff[i].out[j];
+            pubkey_coeff_times_t[i].b[j] <-- TPowersBits[i].out[j];
+            pubkey_coeff_times_t[i].p[j] <-- order[j];
+        }
+    }
+
     // compute (r * sinv) * pubkey for each signature
     component pubkey_mult[b];
     for (var i = 0; i < b; i++) {
         pubkey_mult[i] = Secp256k1ScalarMult(n, k);
         for (var j = 0; j < k; j++) {
-            pubkey_mult[i].scalar[j] <-- pubkey_coeff[i].out[j];
+            pubkey_mult[i].scalar[j] <-- pubkey_coeff_times_t[i].out[j];
             pubkey_mult[i].point[0][j] <-- pubkey[i][0][j];
             pubkey_mult[i].point[1][j] <-- pubkey[i][1][j];
         }
