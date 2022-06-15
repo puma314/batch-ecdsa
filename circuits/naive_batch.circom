@@ -43,8 +43,12 @@ template merkleTreeRoot(numLeaves) {
 template naiveBatchVerify(n, k, batchSize) {
     signal input msgHash[batchSize][k];
     signal input sig[batchSize][2][k];
-    signal input addr[batchSize][k];
+    //signal input addr[batchSize][k];
+    signal input pubkey[batchSize][2][k];
 
+    signal output result;
+
+    /*
     signal output merkleRoot; 
 
     component inputRoot = merkleTreeRoot(batchSize * 2 * k); 
@@ -57,4 +61,22 @@ template naiveBatchVerify(n, k, batchSize) {
         }
     }
     merkleRoot <== inputRoot.out; 
+    */
+
+    var total = batchSize;
+    component isValid[batchSize]; 
+    for (var i = 0; i < batchSize; i++) {
+        isValid[i] = ECDSAVerifyNoPubkeyCheck(n, k); 
+        for (var j = 0; j < k; j++) {
+            isValid[i].r[j] <== sig[i][0][j];
+            isValid[i].s[j] <== sig[i][1][j];
+            isValid[i].msghash[j] <== msgHash[i][j];
+            isValid[i].pubkey[0][j] <== pubkey[i][0][j];
+            isValid[i].pubkey[1][j] <== pubkey[i][1][j];
+        }
+        total -= isValid[i].result;
+    }
+    component valid = IsZero(); 
+    valid.in <== total; 
+    result <== valid.out;
 }

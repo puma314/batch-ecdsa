@@ -51,33 +51,48 @@ function Uint8Array_to_array(n: number, k: number, x: Uint8Array) {
   return bigint_to_array(n, k, Uint8Array_to_bigint(x));
 }
 
-describe('Generate input', async function () {
+describe('NaiveBatchECDSAVerify n = 64 k = 4', async function () {
   this.timeout(1000 * 1000);
 
-  let batchSize = 4;
-  let msgHash = [];
-  let sig = [];
-  let pubkey = [];
+  let batchSize = 2;
+  let msgHash: bigint[][] = [];
+  let sig: bigint[][][] = [];
+  let pubkey: bigint[][][] = [];
+  let input: any;
 
-  for (let i = 0; i < batchSize; i++) {
-    let messageHash = await secp.utils.sha256(secp.utils.randomBytes());
-    msgHash.push(Uint8Array_to_array(64, 4, messageHash));
+  let circuit: any;
+  before(async () => {
+    circuit = await wasm_tester(path.join(__dirname, 'circuits', 'test_naive_batch_verify.circom'));
+  });
 
-    let privateKey = secp.utils.randomPrivateKey();
-    let publicKey = secp.getPublicKey(privateKey);
-    pubkey.push(Uint8Array_to_array(64, 4, publicKey));
+  // generate random input
+  before(async () => {
+    for (let i = 0; i < batchSize; i++) {
+      let messageHash = await secp.utils.sha256(secp.utils.randomBytes());
+      msgHash.push(Uint8Array_to_array(64, 4, messageHash));
 
-    let signatureDER = await secp.sign(messageHash, privateKey);
-    let signature = secp.Signature.fromDER(signatureDER);
-    // console.log(signature.r.toString(2).length);
-    sig.push([bigint_to_array(64, 4, signature.r), bigint_to_array(64, 4, signature.s)]);
-  }
+      let privateKey = secp.utils.randomPrivateKey();
+      let publicKey = secp.Point.fromPrivateKey(privateKey);
+      pubkey.push([bigint_to_array(64, 4, publicKey.x), bigint_to_array(64, 4, publicKey.y)]);
 
-  let input = {
-    msgHash: msgHash,
-    sig: sig,
-    pubkey: pubkey,
-  };
+      let signatureDER = await secp.sign(messageHash, privateKey);
+      let signature = secp.Signature.fromDER(signatureDER);
+      // console.log(signature.r.toString(2).length);
+      sig.push([bigint_to_array(64, 4, signature.r), bigint_to_array(64, 4, signature.s)]);
+    }
 
-  console.log(JSON.stringify(input, null, 2));
+    input = {
+      msgHash: msgHash,
+      sig: sig,
+      pubkey: pubkey,
+    };
+    console.log(JSON.stringify(input, null, 2));
+  });
+
+  it('Has correct output', async () => {
+    const expected = { result: '1' };
+    const witness = await circuit.calculateWitness(input);
+    await circuit.assertOut(witness, expected);
+    await circuit.checkConstraints(witness);
+  });
 });
