@@ -3,6 +3,7 @@ import path = require('path');
 import { expect, assert } from 'chai';
 import { getPublicKey, sign, Point } from '@noble/secp256k1';
 import _ from 'lodash';
+import { signECDSAStar } from '../noble-secp256k1';
 
 const circom_tester = require('circom_tester');
 const wasm_tester = circom_tester.wasm;
@@ -106,23 +107,24 @@ describe('ECDSABatchVerifyNoPubkeyCheck', function () {
       let pub1 = test_case[3];
       var msghash: Uint8Array = bigint_to_Uint8Array(msghash_bigint);
 
-      var sig: Uint8Array = await sign(msghash, bigint_to_Uint8Array(privkey), {
+      var sig: any = await signECDSAStar(msghash, bigint_to_Uint8Array(privkey), {
         canonical: true,
         der: false,
       });
-      var r: Uint8Array = sig.slice(0, 32);
-      var r_bigint: bigint = Uint8Array_to_bigint(r);
-      var s: Uint8Array = sig.slice(32, 64);
-      var s_bigint: bigint = Uint8Array_to_bigint(s);
 
-      var priv_array: bigint[] = bigint_to_array(64, 4, privkey);
+      var r_bigint = sig.r;
+      var rprime_bigint = sig.rprime;
+      var s_bigint = sig.s;
+
+      // var priv_array: bigint[] = bigint_to_array(64, 4, privkey);
       var r_array: bigint[] = bigint_to_array(64, 4, r_bigint);
+      var rprime_array: bigint[] = bigint_to_array(64, 4, rprime_bigint);
       var s_array: bigint[] = bigint_to_array(64, 4, s_bigint);
       var msghash_array: bigint[] = bigint_to_array(64, 4, msghash_bigint);
       var pub0_array: bigint[] = bigint_to_array(64, 4, pub0);
       var pub1_array: bigint[] = bigint_to_array(64, 4, pub1);
 
-      return [r_array, s_array, msghash_array, [pub0_array, pub1_array]];
+      return [r_array, rprime_array, s_array, msghash_array, [pub0_array, pub1_array]];
     });
 
     it('Testing sig', async function () {
