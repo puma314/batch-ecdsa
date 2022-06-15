@@ -73,24 +73,54 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     signal t;
     t <-- MultiHasher[b-1][k-1].out;
 
-    component TPowersBits[b];
+   // Get t in k registers of n bits each
+    signal tBits[k];
+    signal sumTBits[k];
+    component tBitsRangeCheck[k];
+    var mod = 2**n;
+    var xTemp[k];
+    for (var i=0; i < k; i++) {
+        if (i == 0) {
+            xTemp[i] = t;
+        } else {
+            xTemp[i] = xTemp[i-1] / mod;
+        }
+        tBits[i] <-- xTemp[i] % mod;
+        // Range check to make sure tBits[i] < 2^n, i.e. actually n bits
+        // tBitsRangeCheck[i] = NumToBits(n);
+        // tBitsRangeCheck.in <== tBits[i];
+        // TODO implement range check
+        if (i == 0) {
+            sumTBits[i] <== tBits[i];
+        } else {
+            sumTBits[i] <== tBits[i] * 2**(n*i) + sumTBits[i-1];
+        }
+    }
+    // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
+    sumTBits[k-1] === t;
+ 
+    signal TPowersBits[b][k];
+    component TPowersBigMult[b-2];
     // contains t^0, t^1, ..., t^(b-1)
     for (var i=0; i < b; i++) {
         if (i == 0) {
-            // This is definitely wrong but NumToBits was giving me trouble
-            TPowersBits[i] = BigMultModP(n,k);
+            // k registers of n bits for t^0 = 1
+            TPowersBits[0][0] <== 1;
+            for (var j=1; j < k; j++) {
+                TPowersBits[0][j] <== 0;
+            }
+        } else if (i == 1) {
+            // just copy tBits for t^1, this is an optimization to avoid a BigMult with 1
             for (var j=0; j < k; j++) {
-                TPowersBits[i].a[j] <-- 1;
-                TPowersBits[i].b[j] <-- 1;
-                TPowersBits[i].p[j] <-- order[j];
+                TPowersBits[j] <== tBits[j];
             }
         } else {
-            // do big mult with t^1 and
-            TPowersBits[i] = BigMultModP(n,k);
+            TPowersBigMult[i-2] = BigMultModP(n,k);
             for (var j=0; j < k; j++) {
-                TPowersBits[i].a[j] <-- TPowersBits[0].out[j];
-                TPowersBits[i].b[j] <-- TPowersBits[i-1].out[j];
-                TPowersBits[i].p[j] <-- order[j];
+                TPowersBigMult[i].a[j] <== tBits[j];
+                TPowersBigMult[i].b[j] <== TPowersBits[i-1][j];
+                TPowersBigMult[i].p[j] <== order[j];
+                TPowersBits[j] <== TPowersBigMult.out[j]
             }
         }
     }
