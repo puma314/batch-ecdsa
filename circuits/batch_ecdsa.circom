@@ -72,6 +72,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     }
     signal t;
     t <-- MultiHasher[b-1][k-1].out;
+    log(t);
 
    // Get t in k registers of n bits each
     signal tBits[k];
@@ -83,9 +84,12 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         if (i == 0) {
             xTemp[i] = t;
         } else {
-            xTemp[i] = xTemp[i-1] / mod;
+            xTemp[i] = xTemp[i-1] \ mod;
         }
         tBits[i] <-- xTemp[i] % mod;
+        log(i);
+        log(xTemp[i]);
+        log(tBits[i]);
         // Range check to make sure tBits[i] < 2^n, i.e. actually n bits
         // tBitsRangeCheck[i] = NumToBits(n);
         // tBitsRangeCheck.in <== tBits[i];
@@ -95,8 +99,10 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         } else {
             sumTBits[i] <== tBits[i] * 2**(n*i) + sumTBits[i-1];
         }
+        log(sumTBits[i]);
     }
     // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
+    log(sumTBits[k-1]);
     sumTBits[k-1] === t;
  
     signal TPowersBits[b][k];
@@ -112,15 +118,17 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         } else if (i == 1) {
             // just copy tBits for t^1, this is an optimization to avoid a BigMult with 1
             for (var j=0; j < k; j++) {
-                TPowersBits[j] <== tBits[j];
+                TPowersBits[1][j] <== tBits[j];
             }
         } else {
             TPowersBigMult[i-2] = BigMultModP(n,k);
             for (var j=0; j < k; j++) {
-                TPowersBigMult[i].a[j] <== tBits[j];
-                TPowersBigMult[i].b[j] <== TPowersBits[i-1][j];
-                TPowersBigMult[i].p[j] <== order[j];
-                TPowersBits[j] <== TPowersBigMult.out[j]
+                TPowersBigMult[i-2].a[j] <== tBits[j];
+                TPowersBigMult[i-2].b[j] <== TPowersBits[i-1][j];
+                TPowersBigMult[i-2].p[j] <== order[j];
+            }
+            for (var j=0; j < k; j++) {
+                TPowersBits[i][j] <== TPowersBigMult[i-2].out[j];
             }
         }
     }
@@ -168,7 +176,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         g_coeff_times_t[i] = BigMultModP(n, k);
         for (var j = 0; j < k; j++) {
             g_coeff_times_t[i].a[j] <-- g_coeff[i].out[j];
-            g_coeff_times_t[i].b[j] <-- TPowersBits[i].out[j];
+            g_coeff_times_t[i].b[j] <-- TPowersBits[i][j];
             g_coeff_times_t[i].p[j] <-- order[j];
         }
     }
@@ -199,7 +207,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         pubkey_coeff_times_t[i] = BigMultModP(n, k);
         for (var j = 0; j < k; j++) {
             pubkey_coeff_times_t[i].a[j] <-- pubkey_coeff[i].out[j];
-            pubkey_coeff_times_t[i].b[j] <-- TPowersBits[i].out[j];
+            pubkey_coeff_times_t[i].b[j] <-- TPowersBits[i][j];
             pubkey_coeff_times_t[i].p[j] <-- order[j];
         }
     }
@@ -254,7 +262,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     for (var i = 0; i < b; i++) {
         r_scaled_by_t[i] = Secp256k1ScalarMult(n, k);
         for (var j = 0; j < k; j++) {
-            r_scaled_by_t[i].scalar[j] <-- TPowersBits[i].out[j];
+            r_scaled_by_t[i].scalar[j] <-- TPowersBits[i][j];
             r_scaled_by_t[i].point[0][j] <-- r[i][j];
             r_scaled_by_t[i].point[1][j] <-- rprime[i][j];
         }
