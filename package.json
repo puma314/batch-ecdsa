@@ -1,9 +1,10 @@
 {
-  "name": "circom-ecdsa",
+  "name": "batch-ecdsa",
   "version": "0.0.1",
-  "description": "bigint arithmetic and secp256k1 ecc operations in circom",
+  "description": "Batch ECDSA verification for secp256k1 in circom",
   "main": "index.js",
   "scripts": {
+    "build:dev": "cd ./scripts/dev && ./build_dev.sh",
     "build:pubkeygen": "cd ./scripts/pubkeygen && ./build_pubkeygen.sh",
     "build:groupsig": "cd ./scripts/groupsig && ./build_groupsig.sh",
     "build:verify": "cd ./scripts/verify && ./build_verify.sh",
