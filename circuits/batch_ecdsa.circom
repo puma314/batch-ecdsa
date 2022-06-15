@@ -31,6 +31,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     assert(k <= 100);
 
     signal input r[b][k];
+    signal input rprime[b][k];
     signal input s[b][k];
     signal input msghash[b][k];
     signal input pubkey[b][2][k];
@@ -84,7 +85,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
                 TPowersBits[i].p[j] <-- order[j];
             }
         } else {
-            // do big mult with t^1 and 
+            // do big mult with t^1 and
             TPowersBits[i] = BigMultModP(n,k);
             for (var j=0; j < k; j++) {
                 TPowersBits[i].a[j] <-- TPowersBits[0].out[j];
@@ -114,7 +115,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
             if (j > 0) {
                 sinv_check[i].out[j] === 0;
             }
-            if (j == 0) { 
+            if (j == 0) {
                 sinv_check[i].out[j] === 1;
             }
         }
@@ -173,7 +174,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
-    // compute (r * sinv) * pubkey for each signature
+    // compute (r * sinv) * pubkey * t^i for each signature
     component pubkey_mult[b];
     for (var i = 0; i < b; i++) {
         pubkey_mult[i] = Secp256k1ScalarMult(n, k);
@@ -184,7 +185,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
-    // compute (h * sinv) * G + (r * sinv) * pubkey for each signature
+    // compute (h * sinv) * G + (r * sinv) * pubkey * t^i for each signature
     component sum_res[b];
     for (var i = 0; i < b; i++) {
         sum_res[i] = Secp256k1AddUnequal(n, k);
@@ -196,26 +197,85 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
-    component compare[b][k];
-    signal num_equal[b][k-1];
+    // compute sum_i t^i (h_i s_i^{-1})) G + sum_i t^i (r_i s_i^{-1}) Q_i
+    component partial_sums[b];
     for (var i = 0; i < b; i++) {
-        for (var j = 0; j < k; j++) {
-            compare[i][j] = IsEqual();
-            compare[i][j].in[0] <-- r[i][j];
-            compare[i][j].in[1] <-- sum_res[i].out[0][j];
+        partial_sums[i] = Secp256k1AddUnequal(n, k);
+        if (i == 0) {
+            for (var j = 0; j < k; j++) {
+                partial_sums[i].a[0][j] <-- 0;
+                partial_sums[i].a[1][j] <-- 0;
+                partial_sums[i].b[0][j] <-- sum_res[i].out[0][j];
+                partial_sums[i].b[1][j] <-- sum_res[i].out[1][j];
+            }
+        } else {
+            for (var j = 0; j < k; j++) {
+                partial_sums[i].a[0][j] <-- partial_sums[i-1].out[0][j];
+                partial_sums[i].a[1][j] <-- partial_sums[i-1].out[0][j];
+                partial_sums[i].b[0][j] <-- sum_res[i].out[0][j];
+                partial_sums[i].b[1][j] <-- sum_res[i].out[1][j];
+            }
+        }
+    }
 
-            if (j > 0) {
-                if (j == 1) {
-                    num_equal[i][j - 1] <-- compare[i][0].out + compare[i][1].out;
-                } else {
-                    num_equal[i][j - 1] <-- num_equal[i][j - 2] + compare[i][j].out;
-                }
+
+    // compute t^i R_i for each i
+    component r_scaled_by_t[b];
+    for (var i = 0; i < b; i++) {
+        r_scaled_by_t[i] = Secp256k1ScalarMult(n, k);
+        for (var j = 0; j < k; j++) {
+            r_scaled_by_t[i].scalar[j] <-- TPowersBits[i].out[j];
+            r_scaled_by_t[i].point[0][j] <-- r[i][j];
+            r_scaled_by_t[i].point[1][j] <-- rprime[i][j];
+        }
+    }
+
+    // compute \sum_i t^i R_i
+    component partial_sum_of_r_scaled[b];
+    for (var i = 0; i < b; i++) {
+        partial_sum_of_r_scaled[i] = Secp256k1AddUnequal(n, k);
+        if (i == 0) {
+            for (var j = 0; j < k; j++) {
+                partial_sum_of_r_scaled[i].a[0][j] <-- 0;
+                partial_sum_of_r_scaled[i].a[1][j] <-- 0;
+                partial_sum_of_r_scaled[i].b[0][j] <-- r_scaled_by_t[i].out[0][j];
+                partial_sum_of_r_scaled[i].b[1][j] <-- r_scaled_by_t[i].out[0][j];
+            }
+        } else {
+            for (var j = 0; j < k; j++) {
+                partial_sum_of_r_scaled[i].a[0][j] <-- partial_sum_of_r_scaled[i-1].out[0][j];
+                partial_sum_of_r_scaled[i].a[1][j] <-- partial_sum_of_r_scaled[i-1].out[1][j];
+                partial_sum_of_r_scaled[i].b[0][j] <-- r_scaled_by_t[i].out[0][j];
+                partial_sum_of_r_scaled[i].b[1][j] <-- r_scaled_by_t[i].out[0][j];
+            }
+        }
+    }
+
+    component compare1[k];
+    component compare2[k];
+
+    signal num_equal[k-1];
+    for (var j = 0; j < k; j++) {
+        compare1[j] = IsEqual();
+        compare2[j] = IsEqual();
+
+        compare1[j].in[0] <-- partial_sum_of_r_scaled[b-1].out[0][j];
+        compare1[j].in[1] <-- partial_sums[b-1].out[0][j];
+
+        compare2[j].in[0] <-- partial_sum_of_r_scaled[b-1].out[1][j];
+        compare2[j].in[1] <-- partial_sums[b-1].out[1][j];
+
+        if (j > 0) {
+            if (j == 1) {
+                num_equal[j-1] <-- compare1[0].out + compare2[0].out + compare1[1].out + compare2[1].out;
+            } else {
+                num_equal[j-1] <-- num_equal[j-2] + compare1[j].out + compare2[j].out;
             }
         }
     }
 
     component res_comp = IsEqual();
-    res_comp.in[0] <-- k;
-    res_comp.in[1] <-- num_equal[0][k - 2];
+    res_comp.in[0] <-- k + k;
+    res_comp.in[1] <-- num_equal[k-2];
     result <-- res_comp.out;
 }
