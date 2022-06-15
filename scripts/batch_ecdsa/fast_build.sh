@@ -25,7 +25,7 @@ echo "DONE ($((end-start))s)"
 
 echo "****Executing witness generation****"
 start=`date +%s`
-./"$BUILD_DIR"/"$CIRCUIT_NAME" input_batch_ecdsa.json "$BUILD_DIR"/witness.wtns
+./"$BUILD_DIR"/"$CIRCUIT_NAME" input_batch_ecdsa_rprime.json "$BUILD_DIR"/witness.wtns
 end=`date +%s`
 echo "DONE ($((end-start))s)"
 
