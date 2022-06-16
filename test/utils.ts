@@ -1,14 +1,11 @@
-import path = require('path');
-
-import { getPublicKey, sign, Point, CURVE } from '@noble/secp256k1';
-import { signECDSAStar } from '../noble-secp256k1';
+import { sign, Point, CURVE } from '@noble/secp256k1';
+import _ from 'lodash';
 
 const F1Field = require('ffjavascript').F1Field;
 const Scalar = require('ffjavascript').Scalar;
 exports.p = Scalar.fromString(
   '21888242871839275222246405745257275088548364400416034343698204186575808495617'
 );
-const Fr = new F1Field(exports.p);
 
 function bigint_to_array(n: number, k: number, x: bigint) {
   let mod: bigint = 1n;
@@ -96,8 +93,6 @@ for (var idx = 0; idx < privkeys.length; idx++) {
   test_cases.push([privkeys[idx], msghash_bigint, pubkey.x, pubkey.y]);
 }
 
-console.log(test_cases);
-
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
@@ -123,21 +118,21 @@ Promise.all(
     var p_1 = Point.BASE.multiply(mod(msghash_bigint * invert(s, n), n));
     var p_2 = Point.fromPrivateKey(privkey).multiply(mod(r * invert(s, n), n));
     var p_res = p_1.add(p_2);
-    var v: bigint = p_res.y;
+    var rprime: bigint = p_res.y;
 
     var r_array: bigint[] = bigint_to_array(64, 4, r);
-    var v_array: bigint[] = bigint_to_array(64, 4, v);
+    var rprime_array: bigint[] = bigint_to_array(64, 4, rprime);
     var s_array: bigint[] = bigint_to_array(64, 4, s);
     var msghash_array: bigint[] = bigint_to_array(64, 4, msghash_bigint);
     var pub0_array: bigint[] = bigint_to_array(64, 4, pub0);
     var pub1_array: bigint[] = bigint_to_array(64, 4, pub1);
 
-    return [r_array, v_array, s_array, msghash_array, [pub0_array, pub1_array]];
+    return [r_array, rprime_array, s_array, msghash_array, [pub0_array, pub1_array]];
   })
 ).then((collated_batch) => {
   var input = {
     r: _.map(collated_batch, (e: any) => e[0]),
-    v: _.map(collated_batch, (e: any) => e[1]),
+    rprime: _.map(collated_batch, (e: any) => e[1]),
     s: _.map(collated_batch, (e: any) => e[2]),
     msghash: _.map(collated_batch, (e: any) => e[3]),
     pubkey: _.map(collated_batch, (e: any) => e[4]),
