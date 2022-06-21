@@ -78,7 +78,7 @@ template AddUnequalCubicConstraint() {
     for (var i = 0; i < 4; i++) y1y2Comp.a[i] <== y1[i];
     for (var i = 0; i < 4; i++) y1y2Comp.b[i] <== y2[i];
     for (var i = 0; i < 7; i++) y1y2[i] <== y1y2Comp.out[i];
- 
+
     component zeroCheck = CheckCubicModPIsZero(200); // 200 bits per register
     for (var i = 0; i < 10; i++) {
         if (i < 7) {
@@ -140,7 +140,7 @@ template Secp256k1PointOnLine() {
     for (var i = 0; i < 4; i++) x1y2Comp.a[i] <== x1[i];
     for (var i = 0; i < 4; i++) x1y2Comp.b[i] <== y2[i];
     for (var i = 0; i < 7; i++) x1y2[i] <== x1y2Comp.out[i]; // 130 bits
-    
+
     component zeroCheck = CheckQuadraticModPIsZero(132);
     for (var i = 0; i < 7; i++) {
         zeroCheck.in[i] <== x3y2[i] + x2y3[i] + x2y1[i] - x3y1[i] - x1y2[i] - x1y3[i];
@@ -201,7 +201,7 @@ template Secp256k1PointOnCurve() {
     component y2Comp = A2NoCarry();
     for (var i = 0; i < 4; i++) y2Comp.a[i] <== y[i];
     for (var i = 0; i < 7; i++) y2[i] <== y2Comp.a2[i];
-    
+
     component zeroCheck = CheckCubicModPIsZero(197); // 197 bits per register
     for (var i = 0; i < 10; i++) {
         if (i == 0) zeroCheck.in[i] <== x3[i] - y2[i] + 7;
@@ -210,11 +210,60 @@ template Secp256k1PointOnCurve() {
     }
 }
 
+template Secp256k1IsDummy(n, k) {
+
+    var dummyHolder[2][100] = get_dummy_point(n, k);
+    var dummy[2][k];
+    for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
+    for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
+
+    component compare_x[k];
+    component compare_y[k];
+    component is_dummy = IsEqual();
+    signal num_equal[k-1];
+    signal input in[2][k];
+    signal output out;
+
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        compare_x[reg_idx] = IsEqual();
+        compare_y[reg_idx] = IsEqual();
+
+        compare_x[reg_idx].in[0] <== in[0][reg_idx];
+        compare_x[reg_idx].in[1] <== dummy[0][reg_idx];
+        compare_y[reg_idx].in[0] <== in[1][reg_idx];
+        compare_y[reg_idx].in[1] <== dummy[1][reg_idx];
+        if (reg_idx > 0) {
+            if (reg_idx == 1) {
+                num_equal[reg_idx - 1] <== compare_x[0].out + compare_y[0].out + compare_x[1].out + compare_y[1].out;
+            } else {
+                num_equal[reg_idx - 1] <== num_equal[reg_idx-2] + compare_x[reg_idx].out + compare_y[reg_idx].out;
+            }
+        }
+    }
+
+    is_dummy.in[0] <== 2 * k;
+    is_dummy.in[1] <== num_equal[k-2];
+    out <== is_dummy.out;
+}
+
 template Secp256k1AddUnequal(n, k) {
     assert(n == 64 && k == 4);
 
     signal input a[2][k];
     signal input b[2][k];
+
+    component is_a_dummy = Secp256k1IsDummy(n,k);
+    component is_b_dummy = Secp256k1IsDummy(n,k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        is_a_dummy.in[0][reg_idx] <== a[0][reg_idx];
+        is_a_dummy.in[1][reg_idx] <== a[1][reg_idx];
+        is_b_dummy.in[0][reg_idx] <== b[0][reg_idx];
+        is_b_dummy.in[1][reg_idx] <== b[1][reg_idx];
+    }
+
+    component is_dummy = OR();
+    is_dummy.a <== is_a_dummy.out;
+    is_dummy.b <== is_b_dummy.out;
 
     signal output out[2][k];
     var x1[4];
@@ -230,8 +279,8 @@ template Secp256k1AddUnequal(n, k) {
 
     var tmp[2][100] = secp256k1_addunequal_func(n, k, x1, y1, x2, y2);
     for(var i = 0; i < k;i++){
-        out[0][i] <-- tmp[0][i];
-        out[1][i] <-- tmp[1][i];
+        out[0][i] <-- tmp[0][i] * (1 - is_dummy.out) + b[0][i] * (is_a_dummy.out * (1-is_b_dummy.out)) + a[0][i] * is_b_dummy.out * (1-is_a_dummy.out) + a[0][i] * ((1-is_a_dummy.out) * (1-is_b_dummy.out));
+        out[1][i] <-- tmp[1][i] * (1 - is_dummy.out) + b[1][i] * (is_a_dummy.out * (1-is_b_dummy.out)) + a[1][i] * is_b_dummy.out * (1-is_a_dummy.out) + a[1][i] * ((1-is_a_dummy.out) * (1-is_b_dummy.out));
     }
 
     component cubic_constraint = AddUnequalCubicConstraint();
@@ -243,7 +292,7 @@ template Secp256k1AddUnequal(n, k) {
         cubic_constraint.x3[i] <== out[0][i];
         cubic_constraint.y3[i] <== out[1][i];
     }
-    
+
     component point_on_line = Secp256k1PointOnLine();
     for(var i = 0; i < k; i++){
         point_on_line.x1[i] <== a[0][i];
@@ -267,6 +316,12 @@ template Secp256k1Double(n, k) {
 
     signal input in[2][k];
 
+    component is_dummy = Secp256k1IsDummy(n,k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        is_dummy.in[0][reg_idx] <== in[0][reg_idx];
+        is_dummy.in[1][reg_idx] <== in[1][reg_idx];
+    }
+
     signal output out[2][k];
     var x1[4];
     var y1[4];
@@ -277,8 +332,8 @@ template Secp256k1Double(n, k) {
 
     var tmp[2][100] = secp256k1_double_func(n, k, x1, y1);
     for(var i = 0; i < k;i++){
-        out[0][i] <-- tmp[0][i];
-        out[1][i] <-- tmp[1][i];
+        out[0][i] <-- tmp[0][i] * (1 - is_dummy.out) + in[0][i] * is_dummy.out;
+        out[1][i] <-- tmp[1][i] * (1 - is_dummy.out) + in[1][i] * is_dummy.out;
     }
 
     component point_on_tangent = Secp256k1PointOnTangent();
@@ -288,7 +343,7 @@ template Secp256k1Double(n, k) {
         point_on_tangent.x3[i] <== out[0][i];
         point_on_tangent.y3[i] <== out[1][i];
     }
- 
+
     component point_on_curve = Secp256k1PointOnCurve();
     for(var i = 0; i < k; i++){
         point_on_curve.x[i] <== out[0][i];

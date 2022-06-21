@@ -451,6 +451,40 @@ template BigSub(n, k) {
     underflow <== unit[k - 2].borrow;
 }
 
+template BigAddModP(n, k){
+    assert(n <= 252);
+    signal input a[k];
+    signal input b[k];
+    signal input p[k];
+    signal output out[k];
+
+    component add = BigAdd(n,k);
+    for (var i = 0; i < k; i++) {
+        add.a[i] <== a[i];
+        add.b[i] <== b[i];
+    }
+    component lt = BigLessThan(n, k+1);
+    for (var i = 0; i < k; i++) {
+        lt.a[i] <== add.out[i];
+        lt.b[i] <== p[i];
+    }
+    lt.a[k] <== add.out[k];
+    lt.b[k] <== 0;
+
+    component sub = BigSub(n,k+1);
+    for (var i = 0; i < k; i++) {
+        sub.a[i] <== add.out[i];
+        sub.b[i] <== (1-lt.out) * p[i];
+    }
+    sub.a[k] <== add.out[k];
+    sub.b[k] <== 0;
+
+    sub.out[k] === 0;
+    for (var i = 0; i < k; i++) {
+        out[i] <== sub.out[i];
+    }
+}
+
 // calculates (a - b) % p, where a, b < p
 // note: does not assume a >= b
 template BigSubModP(n, k){
@@ -542,15 +576,15 @@ template BigModInv(n, k) {
 // each limbs is n bits
 template CheckCarryToZero(n, m, k) {
     assert(k >= 2);
-    
+
     var EPSILON = 3;
-    
+
     signal input in[k];
-    
+
     signal carry[k];
     component carryRangeChecks[k];
     for (var i = 0; i < k-1; i++){
-        carryRangeChecks[i] = Num2Bits(m + EPSILON - n); 
+        carryRangeChecks[i] = Num2Bits(m + EPSILON - n);
         if( i == 0 ){
             carry[i] <-- in[i] / (1<<n);
             in[i] === carry[i] * (1<<n);
@@ -562,5 +596,5 @@ template CheckCarryToZero(n, m, k) {
         // checking carry is in the range of - 2^(m-n-1+eps), 2^(m+-n-1+eps)
         carryRangeChecks[i].in <== carry[i] + ( 1<< (m + EPSILON - n - 1));
     }
-    in[k-1] + carry[k-2] === 0;   
+    in[k-1] + carry[k-2] === 0;
 }
