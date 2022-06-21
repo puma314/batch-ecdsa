@@ -56,10 +56,10 @@ template Secp256k1LinearCombination(n, k, b) {
     // TODO make the privkey a hash of all inputs for obtaining a random point
     // to add to instead of 0
 
-    var dummyHolder[2][100] = get_dummy_point(n, k);
-    var dummy[2][k];
-    for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
-    for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
+    // var dummyHolder[2][100] = get_dummy_point(n, k);
+    // var dummy[2][k];
+    // for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
+    // for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
 
     // Generating 2 random points to add to and subtract from
     component aux1 = ECDSAPrivToPub(n, k);
@@ -206,6 +206,7 @@ template Secp256k1LinearCombination(n, k, b) {
     // It should be the case that aux1 + numZeroSelectors * aux2 + add_acc[0][b-1] is the result
     // -1 = BigSubModP(0, 1, order)
     // numZeroSelectors in n, k
+    // TODO we can add lookup tables here to avoid the conversion
     component negativeOne = BigSubModP(n,k);
     component numZeroSelectorsBigInt = ConvertBigInt(n,k);
     numZeroSelectorsBigInt.in <== numZeroSelectors;
