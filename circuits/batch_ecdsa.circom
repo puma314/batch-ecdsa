@@ -196,7 +196,8 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
-    signal numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
+    signal numZeroSelectors;
+    numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
 
     log(5555);
 

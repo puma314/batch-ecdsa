@@ -350,7 +350,7 @@ describe('Secp256k1LinearCombination', function () {
 
   var coeffs: Array<bigint> = [];
   for (var idx = 0; idx < 2; idx++) {
-    var coeff = 1n;
+    var coeff = BigInt(idx + 1);
     coeffs.push(coeff);
   }
 
@@ -397,7 +397,26 @@ describe('Secp256k1LinearCombination', function () {
       sumy_array
     );
 
+    console.log(
+      JSON.stringify({
+        coeffs: [coeff0_array, coeff1_array],
+        points: [
+          [point0x_array, point0y_array],
+          [point1x_array, point1y_array],
+        ],
+      })
+    );
+
     it('testing linear combination', async function () {
+      console.log(
+        JSON.stringify({
+          coeffs: [coeff0_array, coeff1_array],
+          points: [
+            [point0x_array, point0y_array],
+            [point1x_array, point1y_array],
+          ],
+        })
+      );
       let witness = await circuit.calculateWitness({
         coeffs: [coeff0_array, coeff1_array],
         points: [
