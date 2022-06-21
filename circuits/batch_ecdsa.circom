@@ -199,6 +199,7 @@ template Secp256k1LinearCombination(n, k, b) {
     signal numZeroSelectors;
     numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
 
+    log(numZeroSelectors);
     log(5555);
 
     component double_acc[num_coordinates];
@@ -214,7 +215,6 @@ template Secp256k1LinearCombination(n, k, b) {
     log(6666);
 
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
-        log(coord_idx);
         double_acc[coord_idx] = Secp256k1Double(n, k);
         if (coord_idx != num_coordinates - 1) {
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
@@ -224,11 +224,9 @@ template Secp256k1LinearCombination(n, k, b) {
         }
 
         for (var batch_idx = 0; batch_idx < b; batch_idx++) {
-            log(batch_idx);
             add_acc[coord_idx][batch_idx] = Secp256k1AddUnequal(n, k);
 
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-                log(reg_idx);
                 if (batch_idx == 0 && coord_idx == num_coordinates - 1) {
                     // On the first turn, you want to add to aux1
                     add_acc[coord_idx][batch_idx].a[0][reg_idx] <== aux1.pubkey[0][reg_idx];
@@ -255,6 +253,7 @@ template Secp256k1LinearCombination(n, k, b) {
     component negativeOne = BigSubModP(n,k);
     component numZeroSelectorsBigInt = ConvertBigInt(n,k);
     numZeroSelectorsBigInt.in <== numZeroSelectors;
+    log(numZeroSelectors);
     component negNumZeroSelectors = BigSubModP(n,k);
 
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
@@ -268,10 +267,20 @@ template Secp256k1LinearCombination(n, k, b) {
         negNumZeroSelectors.p[reg_idx] <== order[reg_idx];
     }
 
+    log(negativeOne.out[0]);
+    log(negativeOne.out[1]);
+    log(negativeOne.out[2]);
+    log(negativeOne.out[3]);
+
     component negativeAux1 = Secp256k1ScalarMult(n,k);
     component negNumZeroSelectorsTimesAux2 = Secp256k1ScalarMult(n,k);
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
+        if (reg_idx == 0) {
+            negativeAux1.scalar[reg_idx] <== 1;
+        } else {
+            negativeAux1.scalar[reg_idx] <== 0;
+        }
+        // negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
         negativeAux1.point[0][reg_idx] <== aux1.pubkey[0][reg_idx];
         negativeAux1.point[1][reg_idx] <== aux1.pubkey[1][reg_idx];
 
