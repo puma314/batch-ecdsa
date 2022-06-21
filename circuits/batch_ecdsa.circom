@@ -38,13 +38,11 @@ template Secp256k1DoubleRepeat(n, k, w) {
     }
 }
 
-
 /* Shares doublees in combination with sliding window method */
 template Secp256k1LinearCombination(n, k, b) {
     var w = 4;
     var window_size = 1 << w;
     var num_coordinates = div_ceil(n * k, w);
-
 
     signal input coeffs[b][k];
     signal input points[b][2][k];
@@ -69,38 +67,6 @@ template Secp256k1LinearCombination(n, k, b) {
         aux1.privkey[reg_idx] <== coeffs[0][reg_idx];
         aux2.privkey[reg_idx] <== coeffs[1][reg_idx];
     }
-
-
-    log(10111);
-    log(coeffs[0][0]);
-    log(coeffs[0][1]);
-    log(coeffs[0][2]);
-    log(coeffs[0][3]);
-    log(coeffs[1][0]);
-    log(coeffs[1][1]);
-    log(coeffs[1][2]);
-    log(coeffs[1][3]);
-    log(points[0][0][0]);
-    log(points[0][0][1]);
-    log(points[0][0][2]);
-    log(points[0][0][3]);
-    log(points[0][1][0]);
-    log(points[0][1][1]);
-    log(points[0][1][2]);
-    log(points[0][1][3]);
-    log(points[1][0][0]);
-    log(points[1][0][1]);
-    log(points[1][0][2]);
-    log(points[1][0][3]);
-    log(points[1][1][0]);
-    log(points[1][1][1]);
-    log(points[1][1][2]);
-    log(points[1][1][3]);
-
-
-
-
-
 
     // generating lookup table for points P_1, ..., P_t between multiples 0 and 2^w-1
     for (var i = 0; i < b; i++) {
@@ -258,7 +224,7 @@ template Secp256k1LinearCombination(n, k, b) {
 
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
         negativeOne.a[reg_idx] <== 0;
-        if (reg_idx == 0) negativeOne.b[reg_idx] <== 1;
+        if (reg_idx == 0) negativeOne.b[reg_idx] <== 2;
         else negativeOne.b[reg_idx] <== 0;
         negativeOne.p[reg_idx] <== order[reg_idx];
 
@@ -275,12 +241,12 @@ template Secp256k1LinearCombination(n, k, b) {
     component negativeAux1 = Secp256k1ScalarMult(n,k);
     component negNumZeroSelectorsTimesAux2 = Secp256k1ScalarMult(n,k);
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        if (reg_idx == 0) {
-            negativeAux1.scalar[reg_idx] <== 1;
-        } else {
-            negativeAux1.scalar[reg_idx] <== 0;
-        }
-        // negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
+        // if (reg_idx == 0) {
+        //     negativeAux1.scalar[reg_idx] <== 1;
+        // } else {
+        //     negativeAux1.scalar[reg_idx] <== 0;
+        // }
+        negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
         negativeAux1.point[0][reg_idx] <== aux1.pubkey[0][reg_idx];
         negativeAux1.point[1][reg_idx] <== aux1.pubkey[1][reg_idx];
 
