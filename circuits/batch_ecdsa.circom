@@ -45,6 +45,7 @@ template Secp256k1LinearCombination(n, k, b) {
     var window_size = 1 << w;
     var num_coordinates = div_ceil(n * k, w);
 
+
     signal input coeffs[b][k];
     signal input points[b][2][k];
     signal output out[2][k];
@@ -68,6 +69,37 @@ template Secp256k1LinearCombination(n, k, b) {
         aux1.privkey[reg_idx] <== coeffs[0][reg_idx];
         aux2.privkey[reg_idx] <== coeffs[1][reg_idx];
     }
+
+
+    log(10111);
+    log(coeffs[0][0]);
+    log(coeffs[0][1]);
+    log(coeffs[0][2]);
+    log(coeffs[0][3]);
+    log(coeffs[1][0]);
+    log(coeffs[1][1]);
+    log(coeffs[1][2]);
+    log(coeffs[1][3]);
+    log(points[0][0][0]);
+    log(points[0][0][1]);
+    log(points[0][0][2]);
+    log(points[0][0][3]);
+    log(points[0][1][0]);
+    log(points[0][1][1]);
+    log(points[0][1][2]);
+    log(points[0][1][3]);
+    log(points[1][0][0]);
+    log(points[1][0][1]);
+    log(points[1][0][2]);
+    log(points[1][0][3]);
+    log(points[1][1][0]);
+    log(points[1][1][1]);
+    log(points[1][1][2]);
+    log(points[1][1][3]);
+
+
+
+
 
 
     // generating lookup table for points P_1, ..., P_t between multiples 0 and 2^w-1
@@ -108,6 +140,9 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
+    log(2222);
+
+
     component n2b[b][k];
     for (var i = 0; i < b; i++) {
         for (var j = 0; j < k; j++) {
@@ -115,6 +150,8 @@ template Secp256k1LinearCombination(n, k, b) {
             n2b[i][j].in <== coeffs[i][j];
         }
     }
+
+    log(3333);
 
     component selectors[b][num_coordinates];
     for (var i = 0; i < b; i++) {
@@ -158,8 +195,10 @@ template Secp256k1LinearCombination(n, k, b) {
             }
         }
     }
-    
+
     signal numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
+
+    log(5555);
 
     component double_acc[num_coordinates];
     component add_acc[num_coordinates][b];
@@ -171,7 +210,10 @@ template Secp256k1LinearCombination(n, k, b) {
     //     first_acc[1][reg_idx] <== multiplexers[0][num_coordinates-1][1].out[reg_idx];
     // }
 
+    log(6666);
+
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
+        log(coord_idx);
         double_acc[coord_idx] = Secp256k1Double(n, k);
         if (coord_idx != num_coordinates - 1) {
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
@@ -181,9 +223,11 @@ template Secp256k1LinearCombination(n, k, b) {
         }
 
         for (var batch_idx = 0; batch_idx < b; batch_idx++) {
+            log(batch_idx);
             add_acc[coord_idx][batch_idx] = Secp256k1AddUnequal(n, k);
 
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                log(reg_idx);
                 if (batch_idx == 0 && coord_idx == num_coordinates - 1) {
                     // On the first turn, you want to add to aux1
                     add_acc[coord_idx][batch_idx].a[0][reg_idx] <== aux1.pubkey[0][reg_idx];
