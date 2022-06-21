@@ -51,6 +51,7 @@ template Secp256k1LinearCombination(n, k, b) {
     signal lookup_table[b][window_size][2][k];
     component doublers[b];
     component adders[b][window_size-3];
+    var order[100] = get_secp256k1_order(n, k);
 
     // TODO make the privkey a hash of all inputs for obtaining a random point
     // to add to instead of 0
@@ -59,6 +60,15 @@ template Secp256k1LinearCombination(n, k, b) {
     var dummy[2][k];
     for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
     for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
+
+    // Generating 2 random points to add to and subtract from
+    component aux1 = ECDSAPrivToPub(n, k);
+    component aux2 = ECDSAPrivToPub(n, k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        aux1.privkey[reg_idx] <== coeffs[0][reg_idx];
+        aux2.privkey[reg_idx] <== coeffs[1][reg_idx];
+    }
+
 
     // generating lookup table for points P_1, ..., P_t between multiples 0 and 2^w-1
     for (var i = 0; i < b; i++) {
@@ -81,9 +91,9 @@ template Secp256k1LinearCombination(n, k, b) {
             }
             for (var l = 0; l < k; l++) {
                 if (j == 0) {
-                    // TODO: change to dummy points
-                    lookup_table[i][j][0][l] <== dummy[0][l];
-                    lookup_table[i][j][1][l] <== dummy[1][l];
+                    // This is now the random point, instead of dummy point
+                    lookup_table[i][j][0][l] <== aux2.pubkey[0][l];
+                    lookup_table[i][j][1][l] <== aux2.pubkey[1][l];
                 } else if (j == 1) {
                     lookup_table[i][j][0][l] <== points[i][0][l];
                     lookup_table[i][j][1][l] <== points[i][1][l];
@@ -122,9 +132,20 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
+    signal numZeroSelectorsArr[b][num_coordinates];
+    component iszero[b][num_coordinates];
     component multiplexers[b][num_coordinates][2];
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
         for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
+            iszero[batch_idx][coord_idx] = IsZero();
+            iszero[batch_idx][coord_idx].in <== selectors[batch_idx][coord_idx].out;
+            if (batch_idx == 0 && coord_idx == 0) {
+                numZeroSelectorsArr[batch_idx][coord_idx] <== 0;
+            } else if (coord_idx == 0) {
+                numZeroSelectorsArr[batch_idx][coord_idx] <== numZeroSelectorsArr[batch_idx-1][num_coordinates - 1] + iszero[batch_idx][coord_idx].out;
+            } else {
+                numZeroSelectorsArr[batch_idx][coord_idx] <== numZeroSelectorsArr[batch_idx][coord_idx-1] + iszero[batch_idx][coord_idx].out;
+            }
             for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                 multiplexers[batch_idx][coord_idx][x_or_y] = Multiplexer(k, window_size);
                 multiplexers[batch_idx][coord_idx][x_or_y].sel <== selectors[batch_idx][coord_idx].out;
@@ -137,16 +158,18 @@ template Secp256k1LinearCombination(n, k, b) {
             }
         }
     }
+    
+    signal numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
 
     component double_acc[num_coordinates];
     component add_acc[num_coordinates][b];
 
-    signal first_acc[2][k];
+    // signal first_acc[2][k];
 
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        first_acc[0][reg_idx] <== multiplexers[0][num_coordinates-1][0].out[reg_idx];
-        first_acc[1][reg_idx] <== multiplexers[0][num_coordinates-1][1].out[reg_idx];
-    }
+    // for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+    //     first_acc[0][reg_idx] <== multiplexers[0][num_coordinates-1][0].out[reg_idx];
+    //     first_acc[1][reg_idx] <== multiplexers[0][num_coordinates-1][1].out[reg_idx];
+    // }
 
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
         double_acc[coord_idx] = Secp256k1Double(n, k);
@@ -162,10 +185,9 @@ template Secp256k1LinearCombination(n, k, b) {
 
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 if (batch_idx == 0 && coord_idx == num_coordinates - 1) {
-                    // do nothing
-                } else if (batch_idx == 1 && coord_idx == num_coordinates - 1) {
-                    add_acc[coord_idx][batch_idx].a[0][reg_idx] <== first_acc[0][reg_idx];
-                    add_acc[coord_idx][batch_idx].a[1][reg_idx] <== first_acc[1][reg_idx];
+                    // On the first turn, you want to add to aux1
+                    add_acc[coord_idx][batch_idx].a[0][reg_idx] <== aux1.pubkey[0][reg_idx];
+                    add_acc[coord_idx][batch_idx].a[1][reg_idx] <== aux1.pubkey[1][reg_idx];
                 } else if (batch_idx == 0) {
                     add_acc[coord_idx][batch_idx].a[0][reg_idx] <== double_acc[coord_idx].out[0][reg_idx];
                     add_acc[coord_idx][batch_idx].a[1][reg_idx] <== double_acc[coord_idx].out[1][reg_idx];
@@ -174,17 +196,62 @@ template Secp256k1LinearCombination(n, k, b) {
                     add_acc[coord_idx][batch_idx].a[1][reg_idx] <== add_acc[coord_idx][batch_idx-1].out[1][reg_idx];
                 }
 
-                if (!(batch_idx == 0 && coord_idx == num_coordinates - 1)) {
-                    add_acc[coord_idx][batch_idx].b[0][reg_idx] <== multiplexers[batch_idx][coord_idx][0].out[reg_idx];
-                    add_acc[coord_idx][batch_idx].b[1][reg_idx] <== multiplexers[batch_idx][coord_idx][1].out[reg_idx];
-                }
+                add_acc[coord_idx][batch_idx].b[0][reg_idx] <== multiplexers[batch_idx][coord_idx][0].out[reg_idx];
+                add_acc[coord_idx][batch_idx].b[1][reg_idx] <== multiplexers[batch_idx][coord_idx][1].out[reg_idx];
             }
         }
     }
 
+    // Here we subtract the random points
+    // It should be the case that aux1 + numZeroSelectors * aux2 + add_acc[0][b-1] is the result
+    // -1 = BigSubModP(0, 1, order)
+    // numZeroSelectors in n, k
+    component negativeOne = BigSubModP(n,k);
+    component numZeroSelectorsBigInt = ConvertBigInt(n,k);
+    numZeroSelectorsBigInt.in <== numZeroSelectors;
+    component negNumZeroSelectors = BigSubModP(n,k);
+
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        out[0][reg_idx] <== add_acc[0][b-1].out[0][reg_idx];
-        out[1][reg_idx] <== add_acc[0][b-1].out[1][reg_idx];
+        negativeOne.a[reg_idx] <== 0;
+        if (reg_idx == 0) negativeOne.b[reg_idx] <== 1;
+        else negativeOne.b[reg_idx] <== 0;
+        negativeOne.p[reg_idx] <== order[reg_idx];
+
+        negNumZeroSelectors.a[reg_idx] <== 0;
+        negNumZeroSelectors.b[reg_idx] <== numZeroSelectorsBigInt.out[reg_idx];
+        negNumZeroSelectors.p[reg_idx] <== order[reg_idx];
+    }
+
+    component negativeAux1 = Secp256k1ScalarMult(n,k);
+    component negNumZeroSelectorsTimesAux2 = Secp256k1ScalarMult(n,k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
+        negativeAux1.point[0][reg_idx] <== aux1.pubkey[0][reg_idx];
+        negativeAux1.point[1][reg_idx] <== aux1.pubkey[1][reg_idx];
+
+        negNumZeroSelectorsTimesAux2.scalar[reg_idx] <== negNumZeroSelectors.out[reg_idx];
+        negNumZeroSelectorsTimesAux2.point[0][reg_idx] <== aux2.pubkey[0][reg_idx];
+        negNumZeroSelectorsTimesAux2.point[1][reg_idx] <== aux2.pubkey[1][reg_idx];
+    }
+
+    component acc1 = Secp256k1AddUnequal(n,k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        acc1.a[0][reg_idx] <== add_acc[0][b-1].out[0][reg_idx];
+        acc1.a[1][reg_idx] <== add_acc[0][b-1].out[1][reg_idx];
+        acc1.b[0][reg_idx] <== negativeAux1.out[0][reg_idx];
+        acc1.b[1][reg_idx] <== negativeAux1.out[1][reg_idx];
+    }
+    component acc2 = Secp256k1AddUnequal(n,k);
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        acc2.a[0][reg_idx] <== acc1.out[0][reg_idx];
+        acc2.a[1][reg_idx] <== acc1.out[1][reg_idx];
+        acc2.b[0][reg_idx] <== negNumZeroSelectorsTimesAux2.out[0][reg_idx];
+        acc2.b[1][reg_idx] <== negNumZeroSelectorsTimesAux2.out[1][reg_idx];
+    }
+
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        out[0][reg_idx] <== acc2.out[0][reg_idx];
+        out[1][reg_idx] <== acc2.out[1][reg_idx];
     }
 }
 

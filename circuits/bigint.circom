@@ -144,6 +144,33 @@ template SplitThree(n, m, k) {
     in === small + medium * (1 << n) + big * (1 << n + m);
 }
 
+// Given an input `in`, converts to a BigInt of k registers of n-bits
+template ConvertBigInt(n,k) {
+    signal input in;
+    signal output out[k];
+
+    signal sumOut[k];
+    // TODO add RangeCheck here
+    component rangeCheck[k];
+    var mod = 2**n;
+    var xTemp[k];
+    for (var i=0; i < k; i++) {
+        if (i == 0) {
+            xTemp[i] = in;
+        } else {
+            xTemp[i] = xTemp[i-1] \ mod;
+        }
+        out[i] <-- xTemp[i] % mod;
+        if (i == 0) {
+            sumOut[i] <== out[i];
+        } else {
+            sumOut[i] <== out[i] * 2**(n*i) + out[i-1];
+        }
+    }
+    // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
+    sumOut[k-1] === in;
+}
+
 // a[i], b[i] in 0... 2**n-1
 // represent a = a[0] + a[1] * 2**n + .. + a[k - 1] * 2**(n * k)
 template BigAdd(n, k) {
