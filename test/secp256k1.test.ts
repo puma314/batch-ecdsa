@@ -353,7 +353,7 @@ describe('Secp256k1LinearCombination', function () {
 
   var coeffs: Array<bigint> = [];
   for (var idx = 0; idx < BATCH_SZ; idx++) {
-    var coeff = BigInt(idx + 1);
+    var coeff = BigInt(idx + 20);
     coeffs.push(coeff);
   }
 
@@ -365,6 +365,8 @@ describe('Secp256k1LinearCombination', function () {
   for (var idx = 0; idx < BATCH_SZ; idx++) {
     sum = sum.add(points[idx].multiply(coeffs[idx]))
   }
+  console.log("SUM")
+  console.log(sum)
   test_case.push([sum.x, sum.y])
   test_cases.push(test_case)
 
@@ -447,15 +449,17 @@ describe('Secp256k1LinearCombination', function () {
       let {out, aux1, aux2, aux2Scalar, normalizedPoint} = interpretWitness(witness)
       console.log('out')
       console.log(out)
-      console.log('aux1')
-      console.log(aux1)
-      console.log('aux2')
-      console.log(aux2)
-      console.log('aux2 scalar')
-      console.log(aux2Scalar)
-      console.log(normalizedPoint)
+      console.log("Expected sum")
+      console.log(test_case[2])
 
-      console.log(sum_x_and_y)
+      // console.log('aux1')
+      // console.log(aux1)
+      // console.log('aux2')
+      // console.log(aux2)
+      // console.log('aux2 scalar')
+      // console.log(aux2Scalar)
+      // console.log(normalizedPoint)
+
       // expect(witness[1]).to.equal(sumx_array[0]);
       // expect(witness[2]).to.equal(sumx_array[1]);
       // expect(witness[3]).to.equal(sumx_array[2]);

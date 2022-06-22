@@ -141,6 +141,7 @@ template Secp256k1LinearCombination(n, k, b) {
     // Keep track of which selectors were zero
     component iszero[b][num_coordinates];
     component has_prev_nonzero[b][num_coordinates];
+
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
         for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
             iszero[batch_idx][coord_idx] = IsZero();
@@ -160,23 +161,73 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
+    // keeps track of whether the whole next coordinate has a 0 or not
+    component has_prev_coordinate_nonzero[num_coordinates];
+    for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
+        has_prev_coordinate_nonzero[coord_idx] = OR();
+        if (coord_idx == num_coordinates - 1) {
+            // This is just 0, since there is no previous entry
+            has_prev_coordinate_nonzero[coord_idx].a <== 0;
+            has_prev_coordinate_nonzero[coord_idx].b <== 0;
+        } else {
+            // Either I found a column in the past with a 1 or 
+            has_prev_coordinate_nonzero[coord_idx].a <== has_prev_coordinate_nonzero[coord_idx+1].out;
+            has_prev_coordinate_nonzero[coord_idx].b <== has_prev_nonzero[b-1][coord_idx+1].out;
+        }
+    }
+
+    log(88888);
+    for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
+        log(selectors[0][coord_idx].out);
+        log(has_prev_nonzero[0][coord_idx].out);
+        log(has_prev_coordinate_nonzero[coord_idx].out);
+    }
+    log(88888);
+
+    // Log dummy point
+    log(1111);     
+    
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+            log(dummy[x_or_y][reg_idx]);
+        }
+    }
+    log(1111);
+
+    // log(2222);     
+    
+    // for (var batch_idx = 0; batch_idx < b; batch_idx++) {
+    //     for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+    //         log(dummy[x_or_y][reg_idx]);
+    //     }
+    // }
+    // log(222);
+
+
     // Efficient computation of linear combinations of elliptic curve points
     signal acc[num_coordinates][2][k];
     signal intermed1[num_coordinates][b-1][2][k];
     signal intermed2[num_coordinates][b-1][2][k];
+    signal intermed3[num_coordinates][2][k];
+    signal intermed4[num_coordinates][2][k];
     signal partial[num_coordinates][b][2][k];
     component doublers[num_coordinates];
     component adders[num_coordinates][b-1];
     component final_adder[num_coordinates];
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
+
         // If this is not the first coordinate, double the accumulator from the last iteration
         if (coord_idx != num_coordinates - 1) {
+            // log(2222);
+            // log(coord_idx);
             doublers[coord_idx] = Secp256k1DoubleRepeat(n, k, w);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     doublers[coord_idx].in[x_or_y][reg_idx] <== acc[coord_idx+1][x_or_y][reg_idx];
+                    // log(acc[coord_idx+1][x_or_y][reg_idx]);
                 }
             }
+            // log(2222);
         }
 
         // Set the first index of the partial sum to the multiplexer output (could be dummy!)
@@ -220,6 +271,7 @@ template Secp256k1LinearCombination(n, k, b) {
         }
 
         // If this is the first round, set the accumulator to the partial sum
+        // We do not check has_prev_coordinate_nonzero
         final_adder[coord_idx] = Secp256k1AddUnequal(n, k);
         if (coord_idx == num_coordinates - 1) {
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
@@ -238,12 +290,41 @@ template Secp256k1LinearCombination(n, k, b) {
             }
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
-                    acc[coord_idx][x_or_y][reg_idx] <==
-                        (1 - has_prev_nonzero[b-1][coord_idx].out) * (doublers[coord_idx].out[x_or_y][reg_idx] - final_adder[coord_idx].out[x_or_y][reg_idx])
-                        + final_adder[coord_idx].out[x_or_y][reg_idx];
+                        // signal intermed3[num_coordinates][2][k];
+                    intermed3[coord_idx][x_or_y][reg_idx] <== has_prev_nonzero[b-1][coord_idx].out * (final_adder[coord_idx].out[x_or_y][reg_idx] - doublers[coord_idx].out[x_or_y][reg_idx])
+                        + doublers[coord_idx].out[x_or_y][reg_idx];
+                    
+                    // doublers[coord_idx].out[x_or_y][reg_idx]
+                    //     + has_prev_nonzero[b-1][coord_idx].out * partial[coord_idx][b-1][x_or_y][reg_idx];
+                    intermed4[coord_idx][x_or_y][reg_idx] <== (1-has_prev_nonzero[b-1][coord_idx].out) * (dummy[x_or_y][reg_idx])
+                        + (has_prev_nonzero[b-1][coord_idx].out) * (partial[coord_idx][b-1][x_or_y][reg_idx]);
+                    
+
+                    // Case 1: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 1
+                    // We want to add doublers (result from past) + partial (result from current), i.e. final_addr
+                    // Case 2: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 0
+                    // We want to only get doublers (i.e. result from past), but not add current
+                    // Case 3:  has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 0
+                    // Dummy point? 
+                    // Case 4: has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 1
+                    // Only partial
+
+                    acc[coord_idx][x_or_y][reg_idx] <== has_prev_coordinate_nonzero[coord_idx].out * (intermed3[coord_idx][x_or_y][reg_idx] - intermed4[coord_idx][x_or_y][reg_idx])
+                        + intermed4[coord_idx][x_or_y][reg_idx];
                 }
             }
         }
+
+        // log(9999);
+        // log(coord_idx);
+        // for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        //     for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+        //         log(acc[coord_idx][x_or_y][reg_idx]);
+        //         log(partial[coord_idx][b-1][x_or_y][reg_idx]);
+
+        //     }
+        // }
+        // log(9999);
     }
 
     // Write result to output elliptic curve point signal
