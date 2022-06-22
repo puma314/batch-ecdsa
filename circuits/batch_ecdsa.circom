@@ -38,87 +38,73 @@ template Secp256k1DoubleRepeat(n, k, w) {
     }
 }
 
-/* Shares doublees in combination with sliding window method */
+
 template Secp256k1LinearCombination(n, k, b) {
+    // Variables
     var w = 4;
     var window_size = 1 << w;
     var num_coordinates = div_ceil(n * k, w);
+    var order[100] = get_secp256k1_order(n, k);
+    var dummyHolder[2][100] = get_dummy_point(n, k);
+    var dummy[2][k];
+    for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
+    for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
 
+    // Input & Output Signals
     signal input coeffs[b][k];
     signal input points[b][2][k];
     signal output out[2][k];
+
+    // Generating lookup table for points[0], ..., points[b-1] between multiples 0 and 2^w-1
     signal lookup_table[b][window_size][2][k];
-    component doublers[b];
-    component adders[b][window_size-3];
-    var order[100] = get_secp256k1_order(n, k);
-
-    // TODO make the privkey a hash of all inputs for obtaining a random point
-    // to add to instead of 0
-
-    // var dummyHolder[2][100] = get_dummy_point(n, k);
-    // var dummy[2][k];
-    // for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
-    // for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
-
-    // Generating 2 random points to add to and subtract from
-    component aux1 = ECDSAPrivToPub(n, k);
-    component aux2 = ECDSAPrivToPub(n, k);
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        aux1.privkey[reg_idx] <== coeffs[0][reg_idx];
-        aux2.privkey[reg_idx] <== coeffs[1][reg_idx];
-    }
-
-    // generating lookup table for points P_1, ..., P_t between multiples 0 and 2^w-1
+    component table_doublers[b];
+    component table_adders[b][window_size-3];
     for (var i = 0; i < b; i++) {
         for (var j = 0; j < window_size; j++) {
             if (j == 2) {
-                doublers[i] = Secp256k1Double(n, k);
+                table_doublers[i] = Secp256k1Double(n, k);
                 for (var l = 0; l < k; l++) {
-                    doublers[i].in[0][l] <== points[i][0][l];
-                    doublers[i].in[1][l] <== points[i][1][l];
+                    table_doublers[i].in[0][l] <== points[i][0][l];
+                    table_doublers[i].in[1][l] <== points[i][1][l];
                 }
             }
             else if (j > 2) {
-                adders[i][j-3] = Secp256k1AddUnequal(n, k);
+                table_adders[i][j-3] = Secp256k1AddUnequal(n, k);
                 for (var l = 0; l < k; l++) {
-                    adders[i][j-3].a[0][l] <== points[i][0][l];
-                    adders[i][j-3].a[1][l] <== points[i][1][l];
-                    adders[i][j-3].b[0][l] <== lookup_table[i][j-1][0][l];
-                    adders[i][j-3].b[1][l] <== lookup_table[i][j-1][1][l];
+                    table_adders[i][j-3].a[0][l] <== points[i][0][l];
+                    table_adders[i][j-3].a[1][l] <== points[i][1][l];
+                    table_adders[i][j-3].b[0][l] <== lookup_table[i][j-1][0][l];
+                    table_adders[i][j-3].b[1][l] <== lookup_table[i][j-1][1][l];
                 }
             }
             for (var l = 0; l < k; l++) {
                 if (j == 0) {
-                    // This is now the random point, instead of dummy point
-                    lookup_table[i][j][0][l] <== aux2.pubkey[0][l];
-                    lookup_table[i][j][1][l] <== aux2.pubkey[1][l];
+                    lookup_table[i][j][0][l] <== dummy[0][l];
+                    lookup_table[i][j][1][l] <== dummy[1][l];
                 } else if (j == 1) {
                     lookup_table[i][j][0][l] <== points[i][0][l];
                     lookup_table[i][j][1][l] <== points[i][1][l];
                 } else if (j == 2) {
-                    lookup_table[i][j][0][l] <== doublers[i].out[0][l];
-                    lookup_table[i][j][1][l] <== doublers[i].out[1][l];
+                    lookup_table[i][j][0][l] <== table_doublers[i].out[0][l];
+                    lookup_table[i][j][1][l] <== table_doublers[i].out[1][l];
                 } else {
-                    lookup_table[i][j][0][l] <== adders[i][j-3].out[0][l];
-                    lookup_table[i][j][1][l] <== adders[i][j-3].out[1][l];
+                    lookup_table[i][j][0][l] <== table_adders[i][j-3].out[0][l];
+                    lookup_table[i][j][1][l] <== table_adders[i][j-3].out[1][l];
                 }
             }
         }
     }
 
-    log(2222);
-
-
+    // Convert each coefficient to a bit representation
     component n2b[b][k];
-    for (var i = 0; i < b; i++) {
-        for (var j = 0; j < k; j++) {
-            n2b[i][j] = Num2Bits(n);
-            n2b[i][j].in <== coeffs[i][j];
+    for (var batch_idx = 0; batch_idx < b; batch_idx++) {
+        for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+            n2b[batch_idx][reg_idx] = Num2Bits(n);
+            n2b[batch_idx][reg_idx].in <== coeffs[batch_idx][reg_idx];
         }
     }
 
-    log(3333);
-
+    // Compute coordinates of each coefficient in base 2^w
     component selectors[b][num_coordinates];
     for (var i = 0; i < b; i++) {
         for (var j = 0; j < num_coordinates; j++) {
@@ -135,20 +121,10 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
-    signal numZeroSelectorsArr[b][num_coordinates];
-    component iszero[b][num_coordinates];
+    // Select precomputed elliptic curve points from table using selector coordinates
     component multiplexers[b][num_coordinates][2];
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
         for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
-            iszero[batch_idx][coord_idx] = IsZero();
-            iszero[batch_idx][coord_idx].in <== selectors[batch_idx][coord_idx].out;
-            if (batch_idx == 0 && coord_idx == 0) {
-                numZeroSelectorsArr[batch_idx][coord_idx] <== 0;
-            } else if (coord_idx == 0) {
-                numZeroSelectorsArr[batch_idx][coord_idx] <== numZeroSelectorsArr[batch_idx-1][num_coordinates - 1] + iszero[batch_idx][coord_idx].out;
-            } else {
-                numZeroSelectorsArr[batch_idx][coord_idx] <== numZeroSelectorsArr[batch_idx][coord_idx-1] + iszero[batch_idx][coord_idx].out;
-            }
             for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                 multiplexers[batch_idx][coord_idx][x_or_y] = Multiplexer(k, window_size);
                 multiplexers[batch_idx][coord_idx][x_or_y].sel <== selectors[batch_idx][coord_idx].out;
@@ -162,117 +138,119 @@ template Secp256k1LinearCombination(n, k, b) {
         }
     }
 
-    signal numZeroSelectors;
-    numZeroSelectors <== numZeroSelectorsArr[b-1][num_coordinates-1];
+    // Keep track of which selectors were zero
+    component iszero[b][num_coordinates];
+    component has_prev_nonzero[b][num_coordinates];
+    for (var batch_idx = 0; batch_idx < b; batch_idx++) {
+        for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
+            iszero[batch_idx][coord_idx] = IsZero();
+            iszero[batch_idx][coord_idx].in <== selectors[batch_idx][coord_idx].out;
+        }
+    }
+    for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
+        has_prev_nonzero[0][coord_idx] = OR();
+        has_prev_nonzero[0][coord_idx].a <== 0;
+        has_prev_nonzero[0][coord_idx].b <== 1 - iszero[0][coord_idx].out;
+    }
+    for (var coord_idx = 0; coord_idx < num_coordinates; coord_idx++) {
+        for (var batch_idx = 1; batch_idx < b; batch_idx++) {
+            has_prev_nonzero[batch_idx][coord_idx] = OR();
+            has_prev_nonzero[batch_idx][coord_idx].a <== has_prev_nonzero[batch_idx-1][coord_idx].out;
+            has_prev_nonzero[batch_idx][coord_idx].b <== 1 - iszero[batch_idx][coord_idx].out;
+        }
+    }
 
-    log(numZeroSelectors);
-    log(5555);
-
-    component double_acc[num_coordinates];
-    component add_acc[num_coordinates][b];
-
-    // signal first_acc[2][k];
-
-    // for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-    //     first_acc[0][reg_idx] <== multiplexers[0][num_coordinates-1][0].out[reg_idx];
-    //     first_acc[1][reg_idx] <== multiplexers[0][num_coordinates-1][1].out[reg_idx];
-    // }
-
-    log(6666);
-
+    // Efficient computation of linear combinations of elliptic curve points
+    signal acc[num_coordinates][2][k];
+    signal intermed1[num_coordinates][b-1][2][k];
+    signal intermed2[num_coordinates][b-1][2][k];
+    signal partial[num_coordinates][b][2][k];
+    component doublers[num_coordinates];
+    component adders[num_coordinates][b-1];
+    component final_adder[num_coordinates];
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
-        double_acc[coord_idx] = Secp256k1Double(n, k);
+        // If this is not the first coordinate, double the accumulator from the last iteration
         if (coord_idx != num_coordinates - 1) {
+            doublers[coord_idx] = Secp256k1DoubleRepeat(n, k, w);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-                double_acc[coord_idx].in[0][reg_idx] <== add_acc[coord_idx+1][b-1].out[0][reg_idx];
-                double_acc[coord_idx].in[1][reg_idx] <== add_acc[coord_idx+1][b-1].out[1][reg_idx];
-            }
-        }
-
-        for (var batch_idx = 0; batch_idx < b; batch_idx++) {
-            add_acc[coord_idx][batch_idx] = Secp256k1AddUnequal(n, k);
-
-            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-                if (batch_idx == 0 && coord_idx == num_coordinates - 1) {
-                    // On the first turn, you want to add to aux1
-                    add_acc[coord_idx][batch_idx].a[0][reg_idx] <== aux1.pubkey[0][reg_idx];
-                    add_acc[coord_idx][batch_idx].a[1][reg_idx] <== aux1.pubkey[1][reg_idx];
-                } else if (batch_idx == 0) {
-                    add_acc[coord_idx][batch_idx].a[0][reg_idx] <== double_acc[coord_idx].out[0][reg_idx];
-                    add_acc[coord_idx][batch_idx].a[1][reg_idx] <== double_acc[coord_idx].out[1][reg_idx];
-                } else {
-                    add_acc[coord_idx][batch_idx].a[0][reg_idx] <== add_acc[coord_idx][batch_idx-1].out[0][reg_idx];
-                    add_acc[coord_idx][batch_idx].a[1][reg_idx] <== add_acc[coord_idx][batch_idx-1].out[1][reg_idx];
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    doublers[coord_idx].in[x_or_y][reg_idx] <== acc[coord_idx+1][x_or_y][reg_idx];
                 }
+            }
+        }
 
-                add_acc[coord_idx][batch_idx].b[0][reg_idx] <== multiplexers[batch_idx][coord_idx][0].out[reg_idx];
-                add_acc[coord_idx][batch_idx].b[1][reg_idx] <== multiplexers[batch_idx][coord_idx][1].out[reg_idx];
+        // Set the first index of the partial sum to the multiplexer output (could be dummy!)
+        for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+            for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                partial[coord_idx][0][x_or_y][reg_idx] <== multiplexers[0][coord_idx][x_or_y].out[reg_idx];
+            }
+        }
+
+        // Compute the remaining partial sums
+        for (var batch_idx = 1; batch_idx < b; batch_idx++) {
+            // Compute the prev partial sum + current multiplexer output (note: not always used)
+            adders[coord_idx][batch_idx-1] = Secp256k1AddUnequal(n, k);
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    adders[coord_idx][batch_idx-1].a[x_or_y][reg_idx] <==
+                        partial[coord_idx][batch_idx-1][x_or_y][reg_idx];
+                    adders[coord_idx][batch_idx-1].b[x_or_y][reg_idx] <==
+                        multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
+                }
+            }
+
+            // Compute new partial sum according to various cases to handle dummy point
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    // Case 1: there was a prev non-zero selector
+                    intermed1[coord_idx][batch_idx-1][x_or_y][reg_idx] <==
+                        iszero[batch_idx][coord_idx].out * (partial[coord_idx][batch_idx-1][x_or_y][reg_idx] - adders[coord_idx][batch_idx-1].out[x_or_y][reg_idx])
+                        + adders[coord_idx][batch_idx-1].out[x_or_y][reg_idx];
+                    // Case 2: there is not prev non-zero selector
+                    intermed2[coord_idx][batch_idx-1][x_or_y][reg_idx] <==
+                        multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx]
+                        - iszero[batch_idx][coord_idx].out * multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
+                    // If there was prev non-zero selector, set partial to intermed1. otherwise, intermed2
+                    partial[coord_idx][batch_idx][x_or_y][reg_idx] <==
+                        has_prev_nonzero[batch_idx-1][coord_idx].out
+                        * (intermed1[coord_idx][batch_idx-1][x_or_y][reg_idx] - intermed2[coord_idx][batch_idx-1][x_or_y][reg_idx])
+                        + intermed2[coord_idx][batch_idx-1][x_or_y][reg_idx];
+                }
+            }
+        }
+
+        // If this is the first round, set the accumulator to the partial sum
+        final_adder[coord_idx] = Secp256k1AddUnequal(n, k);
+        if (coord_idx == num_coordinates - 1) {
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    acc[coord_idx][x_or_y][reg_idx] <==
+                        (1 - has_prev_nonzero[b-1][coord_idx].out) * (dummy[x_or_y][reg_idx] - partial[coord_idx][b-1][x_or_y][reg_idx])
+                        + partial[coord_idx][b-1][x_or_y][reg_idx];
+                }
+            }
+        } else {
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    final_adder[coord_idx].a[x_or_y][reg_idx] <== doublers[coord_idx].out[x_or_y][reg_idx];
+                    final_adder[coord_idx].b[x_or_y][reg_idx] <== partial[coord_idx][b-1][x_or_y][reg_idx];
+                }
+            }
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    acc[coord_idx][x_or_y][reg_idx] <==
+                        (1 - has_prev_nonzero[b-1][coord_idx].out) * (doublers[coord_idx].out[x_or_y][reg_idx] - final_adder[coord_idx].out[x_or_y][reg_idx])
+                        + final_adder[coord_idx].out[x_or_y][reg_idx];
+                }
             }
         }
     }
 
-    // Here we subtract the random points
-    // It should be the case that aux1 + numZeroSelectors * aux2 + add_acc[0][b-1] is the result
-    // -1 = BigSubModP(0, 1, order)
-    // numZeroSelectors in n, k
-    // TODO we can add lookup tables here to avoid the conversion
-    component negativeOne = BigSubModP(n,k);
-    component numZeroSelectorsBigInt = ConvertBigInt(n,k);
-    numZeroSelectorsBigInt.in <== numZeroSelectors;
-    log(numZeroSelectors);
-    component negNumZeroSelectors = BigSubModP(n,k);
-
+    // Write result to output elliptic curve point signal
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        negativeOne.a[reg_idx] <== 0;
-        if (reg_idx == 0) negativeOne.b[reg_idx] <== 2;
-        else negativeOne.b[reg_idx] <== 0;
-        negativeOne.p[reg_idx] <== order[reg_idx];
-
-        negNumZeroSelectors.a[reg_idx] <== 0;
-        negNumZeroSelectors.b[reg_idx] <== numZeroSelectorsBigInt.out[reg_idx];
-        negNumZeroSelectors.p[reg_idx] <== order[reg_idx];
-    }
-
-    log(negativeOne.out[0]);
-    log(negativeOne.out[1]);
-    log(negativeOne.out[2]);
-    log(negativeOne.out[3]);
-
-    component negativeAux1 = Secp256k1ScalarMult(n,k);
-    component negNumZeroSelectorsTimesAux2 = Secp256k1ScalarMult(n,k);
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        // if (reg_idx == 0) {
-        //     negativeAux1.scalar[reg_idx] <== 1;
-        // } else {
-        //     negativeAux1.scalar[reg_idx] <== 0;
-        // }
-        negativeAux1.scalar[reg_idx] <== negativeOne.out[reg_idx];
-        negativeAux1.point[0][reg_idx] <== aux1.pubkey[0][reg_idx];
-        negativeAux1.point[1][reg_idx] <== aux1.pubkey[1][reg_idx];
-
-        negNumZeroSelectorsTimesAux2.scalar[reg_idx] <== negNumZeroSelectors.out[reg_idx];
-        negNumZeroSelectorsTimesAux2.point[0][reg_idx] <== aux2.pubkey[0][reg_idx];
-        negNumZeroSelectorsTimesAux2.point[1][reg_idx] <== aux2.pubkey[1][reg_idx];
-    }
-
-    component acc1 = Secp256k1AddUnequal(n,k);
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        acc1.a[0][reg_idx] <== add_acc[0][b-1].out[0][reg_idx];
-        acc1.a[1][reg_idx] <== add_acc[0][b-1].out[1][reg_idx];
-        acc1.b[0][reg_idx] <== negativeAux1.out[0][reg_idx];
-        acc1.b[1][reg_idx] <== negativeAux1.out[1][reg_idx];
-    }
-    component acc2 = Secp256k1AddUnequal(n,k);
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        acc2.a[0][reg_idx] <== acc1.out[0][reg_idx];
-        acc2.a[1][reg_idx] <== acc1.out[1][reg_idx];
-        acc2.b[0][reg_idx] <== negNumZeroSelectorsTimesAux2.out[0][reg_idx];
-        acc2.b[1][reg_idx] <== negNumZeroSelectorsTimesAux2.out[1][reg_idx];
-    }
-
-    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        out[0][reg_idx] <== acc2.out[0][reg_idx];
-        out[1][reg_idx] <== acc2.out[1][reg_idx];
+        for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+            out[x_or_y][reg_idx] <== acc[0][x_or_y][reg_idx];
+        }
     }
 }
 
@@ -514,7 +492,6 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
     */
-    log(1111);
     component linear_combiner = Secp256k1LinearCombination(n, k, 2 * b);
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
         for (var reg_idx = 0; reg_idx < k; reg_idx++) {

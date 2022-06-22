@@ -399,13 +399,15 @@ describe('Secp256k1LinearCombination', function () {
 
     console.log(
       JSON.stringify({
-        coeffs: [coeff0_array, coeff1_array],
+        coeffs: [coeff0_array],
         points: [
           [point0x_array, point0y_array],
-          [point1x_array, point1y_array],
         ],
       })
     );
+
+    console.log(sumx_array);
+    console.log(sumy_array);
 
     it('testing linear combination', async function () {
       console.log(
