@@ -1,9 +1,6 @@
 pragma circom 2.0.2;
 
-// include "../node_modules/circomlib/circuits/comparators.circom";
-// include "../node_modules/circomlib/circuits/multiplexer.circom";
 include "../node_modules/circomlib/circuits/poseidon.circom";
-// include "../node_modules/circomlib/circuits/bitify.circom";
 
 include "circom-ecdsa/circuits/bigint.circom";
 include "circom-ecdsa/circuits/secp256k1.circom";
@@ -40,7 +37,12 @@ template Secp256k1DoubleRepeat(n, k, w) {
     }
 }
 
-
+/* Computes a linear combination of ECC points
+ * coeffs[b][k] an array of coefficients for the linear combination
+ * points[b][2][k] an array of ECC points
+ * out[2][k] the computed linear combination of points weighted by coeffs
+ * Note: It is expected that none of the points are equal
+*/
 template Secp256k1LinearCombination(n, k, b) {
     // Input & Output Signals
     signal input coeffs[b][k];
@@ -171,7 +173,7 @@ template Secp256k1LinearCombination(n, k, b) {
             has_prev_coordinate_nonzero[coord_idx].a <== 0;
             has_prev_coordinate_nonzero[coord_idx].b <== 0;
         } else {
-            // Either I found a column in the past with a 1 or
+            // Either there was a column in the past with a 1 or the previous column was 1
             has_prev_coordinate_nonzero[coord_idx].a <== has_prev_coordinate_nonzero[coord_idx+1].out;
             has_prev_coordinate_nonzero[coord_idx].b <== has_prev_nonzero[b-1][coord_idx+1].out;
         }
@@ -258,41 +260,26 @@ template Secp256k1LinearCombination(n, k, b) {
             }
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
-                        // signal intermed3[num_coordinates][2][k];
+                    /*
+                    Case 1: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 1
+                    acc = final_addr = doublers + partial (result from the past + current result)
+                    Case 2: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 0
+                    acc = doublers (result from the past)
+                    Case 3:  has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 0
+                    acc = dummy_point
+                    Case 4: has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 1
+                    acc = partial (current result)
+                    */
                     intermed3[coord_idx][x_or_y][reg_idx] <== has_prev_nonzero[b-1][coord_idx].out * (final_adder[coord_idx].out[x_or_y][reg_idx] - doublers[coord_idx].out[x_or_y][reg_idx])
                         + doublers[coord_idx].out[x_or_y][reg_idx];
-
-                    // doublers[coord_idx].out[x_or_y][reg_idx]
-                    //     + has_prev_nonzero[b-1][coord_idx].out * partial[coord_idx][b-1][x_or_y][reg_idx];
                     intermed4[coord_idx][x_or_y][reg_idx] <== (1-has_prev_nonzero[b-1][coord_idx].out) * (dummy[x_or_y][reg_idx])
                         + (has_prev_nonzero[b-1][coord_idx].out) * (partial[coord_idx][b-1][x_or_y][reg_idx]);
-
-
-                    // Case 1: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 1
-                    // We want to add doublers (result from past) + partial (result from current), i.e. final_addr
-                    // Case 2: has_prev_coordinate_nonzero[coord_idx] = 1, has_prev_nonzero[b-1][coord_idx] = 0
-                    // We want to only get doublers (i.e. result from past), but not add current
-                    // Case 3:  has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 0
-                    // Dummy point?
-                    // Case 4: has_prev_coordinate_nonzero[coord_idx] = 0, has_prev_nonzero[b-1][coord_idx] = 1
-                    // Only partial
 
                     acc[coord_idx][x_or_y][reg_idx] <== has_prev_coordinate_nonzero[coord_idx].out * (intermed3[coord_idx][x_or_y][reg_idx] - intermed4[coord_idx][x_or_y][reg_idx])
                         + intermed4[coord_idx][x_or_y][reg_idx];
                 }
             }
         }
-
-        // log(9999);
-        // log(coord_idx);
-        // for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-        //     for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
-        //         log(acc[coord_idx][x_or_y][reg_idx]);
-        //         log(partial[coord_idx][b-1][x_or_y][reg_idx]);
-
-        //     }
-        // }
-        // log(9999);
     }
 
     // Write result to output elliptic curve point signal
@@ -483,15 +470,15 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     one[2] = 0;
     one[3] = 0;
 
-    // \sum_i (R_i - (r_i s_i^{-1}) Q_i)
+    // \sum_i t^i (R_i - (r_i s_i^{-1}) Q_i)
     component linear_combiner = Secp256k1LinearCombination(n, k, 2 * b);
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
         for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-            // - (r_i s_i^{-1}) * Q_i
+            // - t^i * (r_i s_i^{-1}) * Q_i
             linear_combiner.coeffs[batch_idx*2][reg_idx] <== pubkey_coeff3[batch_idx].out[reg_idx];
             linear_combiner.points[batch_idx*2][0][reg_idx] <== pubkey[batch_idx][0][reg_idx];
             linear_combiner.points[batch_idx*2][1][reg_idx] <== pubkey[batch_idx][1][reg_idx];
-            // 1 * R_i
+            // t^i * R_i
             linear_combiner.coeffs[batch_idx*2+1][reg_idx] <== TPowersBits[batch_idx][reg_idx];
             linear_combiner.points[batch_idx*2+1][0][reg_idx] <== r[batch_idx][reg_idx];
             linear_combiner.points[batch_idx*2+1][1][reg_idx] <== rprime[batch_idx][reg_idx];
@@ -504,9 +491,8 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         generator_term.privkey[j] <== g_coeff_sums[b-1].out[j];
     }
 
-    log(777777);
     component compare[2][k];
-    signal num_equal[k-1];
+    signal num_equal[k];
     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
         for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
             compare[x_or_y][reg_idx] = IsEqual();
@@ -514,5 +500,13 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
             compare[x_or_y][reg_idx].in[1] <== generator_term.pubkey[x_or_y][reg_idx];
             log(compare[x_or_y][reg_idx].out);
         }
+        if (reg_idx == 0) {
+            num_equal[0] <== compare[0][reg_idx].out + compare[1][reg_idx].out;
+        } else {
+            num_equal[reg_idx] <== num_equal[reg_idx-1] + compare[0][reg_idx].out + compare[1][reg_idx].out;
+        }
     }
+    component SumsEqual = IsZero();
+    SumsEqual.in <== num_equal[k-1] - 2*k;
+    result <== SumsEqual.out;
 }
