@@ -1,7 +1,8 @@
 import path = require('path');
-
+import { interpretWitness } from './linearCombiner'
 import { expect, assert } from 'chai';
 import { getPublicKey, Point } from '@noble/secp256k1';
+import fs from 'fs';
 const circom_tester = require('circom_tester');
 const wasm_tester = circom_tester.wasm;
 
@@ -337,103 +338,136 @@ describe('Secp256k1LinearCombination', function () {
     );
   });
 
+  var BATCH_SZ = 1
+
   // coeff[0], coeff[1], points[0].x, points[0].y, points[1].x, points[1].y, sum.x, sum.y
-  var test_cases: Array<[bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]> = [];
+  var test_cases = [];
 
   // 4 randomly chosen private keys
   var privkeys: Array<bigint> = [1n, 2n];
   var points: Array<Point> = [];
-  for (var idx = 0; idx < 2; idx++) {
+  for (var idx = 0; idx < BATCH_SZ; idx++) {
     var point: Point = Point.fromPrivateKey(privkeys[idx]);
     points.push(point);
   }
 
   var coeffs: Array<bigint> = [];
-  for (var idx = 0; idx < 2; idx++) {
+  for (var idx = 0; idx < BATCH_SZ; idx++) {
     var coeff = BigInt(idx + 1);
     coeffs.push(coeff);
   }
 
-  test_cases.push([
-    coeffs[0],
-    coeffs[1],
-    points[0].x,
-    points[0].y,
-    points[1].x,
-    points[1].y,
-    points[0].add(points[1]).x,
-    points[0].add(points[1]).y,
-  ]);
+  let test_case = []
+  test_case.push(coeffs)
+  test_case.push(points.map((point) => [point.x, point.y]))
+
+  let sum = Point.ZERO
+  for (var idx = 0; idx < BATCH_SZ; idx++) {
+    sum = sum.add(points[idx].multiply(coeffs[idx]))
+  }
+  test_case.push([sum.x, sum.y])
+  test_cases.push(test_case)
+
+  // logging lookup table, this seems right
+  // for (var i = 1; i  < 8; i++) {
+  //   var wP = points[0].multiply(i)
+  //   console.log(bigint_to_array(64, 4, wP.x))
+  //   console.log(bigint_to_array(64, 4, wP.y))
+  // }
+
+  // console.log("LOOKUP TABLE")
+
+  // test_case = [coeffs_arr, [[point0.x, point0.y], [point1.x, point1.y], ...]]
+
 
   var test_secp256k1_linear_combination_instance = function (
-    test_case: [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]
+    test_case: any
   ) {
-    let coeff0 = test_case[0];
-    let coeff1 = test_case[1];
-    let point0x = test_case[2];
-    let point0y = test_case[3];
-    let point1x = test_case[4];
-    let point1y = test_case[5];
-    let sumx = test_case[6];
-    let sumy = test_case[7];
+    // let coeff0 = test_case[0];
+    // let coeff1 = test_case[1];
+    // let point0x = test_case[2];
+    // let point0y = test_case[3];
+    // let point1x = test_case[4];
+    // let point1y = test_case[5];
+    // let sumx = test_case[6];
+    // let sumy = test_case[7];
 
-    let coeff0_array: bigint[] = bigint_to_array(64, 4, coeff0);
-    let coeff1_array: bigint[] = bigint_to_array(64, 4, coeff1);
-    var point0x_array: bigint[] = bigint_to_array(64, 4, point0x);
-    var point0y_array: bigint[] = bigint_to_array(64, 4, point0y);
-    var point1x_array: bigint[] = bigint_to_array(64, 4, point1x);
-    var point1y_array: bigint[] = bigint_to_array(64, 4, point1y);
-    var sumx_array: bigint[] = bigint_to_array(64, 4, sumx);
-    var sumy_array: bigint[] = bigint_to_array(64, 4, sumy);
+    // let coeff0_array: bigint[] = bigint_to_array(64, 4, coeff0);
+    // let coeff1_array: bigint[] = bigint_to_array(64, 4, coeff1);
+    // var point0x_array: bigint[] = bigint_to_array(64, 4, point0x);
+    // var point0y_array: bigint[] = bigint_to_array(64, 4, point0y);
+    // var point1x_array: bigint[] = bigint_to_array(64, 4, point1x);
+    // var point1y_array: bigint[] = bigint_to_array(64, 4, point1y);
+    // var sumx_array: bigint[] = bigint_to_array(64, 4, sumx);
+    // var sumy_array: bigint[] = bigint_to_array(64, 4, sumy);
 
-    console.log(
-      coeff0_array,
-      coeff1_array,
-      point0x_array,
-      point0y_array,
-      point1x_array,
-      point1y_array,
-      sumx_array,
-      sumy_array
-    );
+    // console.log(
+    //   coeff0_array,
+    //   coeff1_array,
+    //   point0x_array,
+    //   point0y_array,
+    //   point1x_array,
+    //   point1y_array,
+    //   sumx_array,
+    //   sumy_array
+    // );
 
-    console.log(
-      JSON.stringify({
-        coeffs: [coeff0_array, coeff1_array],
-        points: [
-          [point0x_array, point0y_array],
-          [point1x_array, point1y_array],
-        ],
-      })
-    );
+    // console.log(
+    //   JSON.stringify({
+    //     coeffs: [coeff0_array, coeff1_array],
+    //     points: [
+    //       [point0x_array, point0y_array],
+    //       [point1x_array, point1y_array],
+    //     ],
+    //   })
+    // );
+    let coeffs = test_case[0]
+    let points_x_and_y = test_case[1]
+    let sum_x_and_y = test_case[2]
+    // console.log(coeffs)
+    // console.log(points_x_and_y)
+    // console.log(sum_x_and_y)
+    console.log(JSON.stringify(
+    {
+      coeffs: coeffs.map((coeff: any) => bigint_to_array(64, 4, coeff)),
+      points: points_x_and_y.map((point_x_and_y: any) => [bigint_to_array(64, 4, point_x_and_y[0]), bigint_to_array(64, 4, point_x_and_y[1])])
+    }))
+
+    // console.log(sumx_array);
+    // console.log(sumy_array);
 
     it('testing linear combination', async function () {
-      console.log(
-        JSON.stringify({
-          coeffs: [coeff0_array, coeff1_array],
-          points: [
-            [point0x_array, point0y_array],
-            [point1x_array, point1y_array],
-          ],
-        })
-      );
+      let witness1 = {"a": 0}
+      fs.writeFileSync('LinearCombinerWitnessFake.json', JSON.stringify(witness1));
       let witness = await circuit.calculateWitness({
-        coeffs: [coeff0_array, coeff1_array],
-        points: [
-          [point0x_array, point0y_array],
-          [point1x_array, point1y_array],
-        ],
+        coeffs: coeffs.map((coeff: any) => bigint_to_array(64, 4, coeff)),
+        points: points_x_and_y.map((point_x_and_y: any) => [bigint_to_array(64, 4, point_x_and_y[0]), bigint_to_array(64, 4, point_x_and_y[1])])
       });
-      expect(witness[1]).to.equal(sumx_array[0]);
-      expect(witness[2]).to.equal(sumx_array[1]);
-      expect(witness[3]).to.equal(sumx_array[2]);
-      expect(witness[4]).to.equal(sumx_array[3]);
-      expect(witness[5]).to.equal(sumy_array[0]);
-      expect(witness[6]).to.equal(sumy_array[1]);
-      expect(witness[7]).to.equal(sumy_array[2]);
-      expect(witness[8]).to.equal(sumy_array[3]);
+      fs.writeFileSync('LinearCombinerWitness.json', JSON.stringify(witness));
+      let {out, aux1, aux2, aux2Scalar, normalizedPoint} = interpretWitness(witness)
+      console.log('out')
+      console.log(out)
+      console.log('aux1')
+      console.log(aux1)
+      console.log('aux2')
+      console.log(aux2)
+      console.log('aux2 scalar')
+      console.log(aux2Scalar)
+      console.log(normalizedPoint)
+
+      console.log(sum_x_and_y)
+      // expect(witness[1]).to.equal(sumx_array[0]);
+      // expect(witness[2]).to.equal(sumx_array[1]);
+      // expect(witness[3]).to.equal(sumx_array[2]);
+      // expect(witness[4]).to.equal(sumx_array[3]);
+      // expect(witness[5]).to.equal(sumy_array[0]);
+      // expect(witness[6]).to.equal(sumy_array[1]);
+      // expect(witness[7]).to.equal(sumy_array[2]);
+      // expect(witness[8]).to.equal(sumy_array[3]);
       await circuit.checkConstraints(witness);
     });
+
+
   };
 
   test_cases.forEach(test_secp256k1_linear_combination_instance);
