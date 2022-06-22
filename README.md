@@ -16,7 +16,8 @@ Circuits can be found in `circuits`. `scripts` contains various utility scripts 
 ## Install submodules
 
 `git submodule init`
-`cd circuits/circom-ecdsa; yarn`
+`git submodule update`
+`yarn --cwd circuits/circom-ecdsa`
 
 - If you want to build the `pubkeygen`, `eth_addr`, and `groupsig` circuits, you'll need to download a Powers of Tau file with `2^20` constraints and copy it into the `circuits` subdirectory of the project, with the name `pot20_final.ptau`. We do not provide such a file in this repo due to its large size. You can download and copy Powers of Tau files from the Hermez trusted setup from [this repository](https://github.com/iden3/snarkjs#7-prepare-phase-2).
 - If you want to build the `verify` circuits, you'll also need a Powers of Tau file that can support at least `2^21` constraints (place it in the same directory as above with the same naming convention).
