@@ -149,6 +149,8 @@ template ConvertBigInt(n,k) {
     signal input in;
     signal output out[k];
 
+    log(0111);
+
     signal sumOut[k];
     // TODO add RangeCheck here
     component rangeCheck[k];
@@ -161,12 +163,14 @@ template ConvertBigInt(n,k) {
             xTemp[i] = xTemp[i-1] \ mod;
         }
         out[i] <-- xTemp[i] % mod;
+        log(out[i]);
         if (i == 0) {
             sumOut[i] <== out[i];
         } else {
-            sumOut[i] <== out[i] * 2**(n*i) + out[i-1];
+            sumOut[i] <== out[i] * (1 << (n*i)) + sumOut[i-1];
         }
     }
+    log(0222);
     // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
     sumOut[k-1] === in;
 }
@@ -223,9 +227,9 @@ template BigMultNoCarry(n, ma, mb, ka, kb) {
     }
 
     var k2 = ka + kb - 1;
-    var pow[k2][k2]; 
+    var pow[k2][k2];
     for(var i = 0; i<k2; i++)for(var j=0; j<k2; j++)
-       pow[i][j] = i ** j;  
+       pow[i][j] = i ** j;
 
     var a_poly[ka + kb - 1];
     var b_poly[ka + kb - 1];
