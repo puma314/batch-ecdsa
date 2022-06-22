@@ -338,7 +338,7 @@ describe('Secp256k1LinearCombination', function () {
     );
   });
 
-  var BATCH_SZ = 1
+  var BATCH_SZ = 2
 
   // coeff[0], coeff[1], points[0].x, points[0].y, points[1].x, points[1].y, sum.x, sum.y
   var test_cases = [];
@@ -451,6 +451,8 @@ describe('Secp256k1LinearCombination', function () {
       console.log(out)
       console.log("Expected sum")
       console.log(test_case[2])
+      expect(out.x).to.equal(test_case[2][0])
+      expect(out.y).to.equal(test_case[2][1])
 
       // console.log('aux1')
       // console.log(aux1)
