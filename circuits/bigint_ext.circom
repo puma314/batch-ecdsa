@@ -1,10 +1,9 @@
 pragma circom 2.0.2;
+
 // Given an input `in`, converts to a BigInt of k registers of n-bits
 template ConvertBigInt(n,k) {
     signal input in;
     signal output out[k];
-
-    log(0111);
 
     signal sumOut[k];
     // TODO add RangeCheck here
@@ -18,14 +17,12 @@ template ConvertBigInt(n,k) {
             xTemp[i] = xTemp[i-1] \ mod;
         }
         out[i] <-- xTemp[i] % mod;
-        log(out[i]);
         if (i == 0) {
             sumOut[i] <== out[i];
         } else {
             sumOut[i] <== out[i] * (1 << (n*i)) + sumOut[i-1];
         }
     }
-    log(0222);
     // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
     sumOut[k-1] === in;
 }
