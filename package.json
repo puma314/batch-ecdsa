@@ -1,20 +1,15 @@
 {
-  "name": "circom-ecdsa",
+  "name": "batch-ecdsa",
   "version": "0.0.1",
-  "description": "bigint arithmetic and secp256k1 ecc operations in circom",
+  "description": "batch ecdsa verification in circom",
   "main": "index.js",
   "scripts": {
-    "build:pubkeygen": "cd ./scripts/pubkeygen && ./build_pubkeygen.sh",
-    "build:groupsig": "cd ./scripts/groupsig && ./build_groupsig.sh",
-    "build:verify": "cd ./scripts/verify && ./build_verify.sh",
-    "build:eth_addr": "cd ./scripts/eth_addr && ./build_eth_addr.sh",
     "build:c": "cd ./scripts/batch_ecdsa && ./fast_build.sh",
     "build:wasm": "cd ./scripts/batch_ecdsa && ./wasm_build.sh",
-    "test": "NODE_OPTIONS=--max_old_space_size=56000 mocha -r ts-node/register 'test/**/*.ts'",
-    "groupsig-demo": "npx ts-node scripts/groupsign_cli.ts"
+    "test": "NODE_OPTIONS=--max_old_space_size=56000 mocha -r ts-node/register 'test/**/*.ts'"
   },
-  "repository": "git@github.com:0xPARC/circom-ecdsa.git",
-  "author": "0xPARC <hello@0xparc.org>",
+  "repository": "git@github.com:puma314/batch-ecdsa.git",
+  "author": "",
   "license": "ISC",
   "dependencies": {
     "circomlib": "^2.0.2",

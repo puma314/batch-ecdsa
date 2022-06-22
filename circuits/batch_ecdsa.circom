@@ -1,16 +1,18 @@
 pragma circom 2.0.2;
 
-include "../node_modules/circomlib/circuits/comparators.circom";
-include "../node_modules/circomlib/circuits/multiplexer.circom";
+// include "../node_modules/circomlib/circuits/comparators.circom";
+// include "../node_modules/circomlib/circuits/multiplexer.circom";
 include "../node_modules/circomlib/circuits/poseidon.circom";
-include "../node_modules/circomlib/circuits/bitify.circom";
+// include "../node_modules/circomlib/circuits/bitify.circom";
 
-include "bigint.circom";
-include "secp256k1.circom";
-include "bigint_func.circom";
-include "ecdsa_func.circom";
-include "ecdsa.circom";
-include "secp256k1_func.circom";
+include "circom-ecdsa/circuits/bigint.circom";
+include "circom-ecdsa/circuits/secp256k1.circom";
+include "circom-ecdsa/circuits/bigint_func.circom";
+include "circom-ecdsa/circuits/ecdsa_func.circom";
+include "circom-ecdsa/circuits/ecdsa.circom";
+include "circom-ecdsa/circuits/secp256k1_func.circom";
+
+include "bigint_ext.circom";
 
 /* Doubles an elliptic curve point w times */
 template Secp256k1DoubleRepeat(n, k, w) {
