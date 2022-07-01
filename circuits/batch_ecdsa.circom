@@ -1,4 +1,4 @@
-pragma circom 2.0.2;
+pragma circom 2.0.4;
 
 include "../node_modules/circomlib/circuits/poseidon.circom";
 
@@ -192,9 +192,16 @@ template Secp256k1LinearCombination(n, k, b) {
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
         // If this is not the first coordinate, double the accumulator from the last iteration
         if (coord_idx != num_coordinates - 1) {
-            doublers[coord_idx] = Secp256k1DoubleRepeat(n, k, w);
+            // doublers[coord_idx] = Secp256k1DoubleRepeat(n, k, w);
+            doublers[coord_idx] = Secp256k1Double(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    if (coord_idx == 18) {
+                        log(1991);
+                        log(x_or_y);
+                        log(reg_idx);
+                        log(acc[coord_idx+1][x_or_y][reg_idx]);
+                    }
                     doublers[coord_idx].in[x_or_y][reg_idx] <== acc[coord_idx+1][x_or_y][reg_idx];
                 }
             }
@@ -207,12 +214,22 @@ template Secp256k1LinearCombination(n, k, b) {
             }
         }
 
+
+        // is it because if we pass in two equals to AddUnequal the constraints will fail????
+
         // Compute the remaining partial sums
         for (var batch_idx = 1; batch_idx < b; batch_idx++) {
             // Compute the prev partial sum + current multiplexer output (note: not always used)
             adders[coord_idx][batch_idx-1] = Secp256k1AddUnequal(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    if (coord_idx == 45 && (batch_idx - 1) == 0) {
+                        log(1337);
+                        log(x_or_y);
+                        log(reg_idx);
+                        log(partial[coord_idx][batch_idx-1][x_or_y][reg_idx]);
+                        log(multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx]);
+                    }
                     adders[coord_idx][batch_idx-1].a[x_or_y][reg_idx] <==
                         partial[coord_idx][batch_idx-1][x_or_y][reg_idx];
                     adders[coord_idx][batch_idx-1].b[x_or_y][reg_idx] <==
@@ -301,6 +318,35 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     // Assertions
     assert(k >= 2);
     assert(k <= 100);
+
+    // signal output result;
+    // signal a[2][4];
+    // signal c[2][4];
+    // a[0][0] <== 10233553553577274097;
+    // a[0][1] <== 11848113261162811300;
+    // a[0][2] <== 14356252394361424706;
+    // a[0][3] <== 576751966640817948;
+    // a[1][0] <== 5834067006967444052;
+    // a[1][1] <== 1784568090659395254;
+    // a[1][2] <== 4943451987703242729;
+    // a[1][3] <== 10654488797333855319;
+
+    // c[0][0] <== 12846848140502544459;
+    // c[0][1] <== 7218945346711666181;
+    // c[0][2] <== 18180345720721855906;
+    // c[0][3] <== 12716249064230344560;
+    // c[1][0] <== 7202084646321258774;
+    // c[1][1] <== 7283137576149702912;
+    // c[1][2] <== 1209145386042003074;
+    // c[1][3] <== 434186738099938339;
+
+    // component doubler = Secp256k1DoubleRepeat(n, k, 4);
+    // for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+    //     for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+    //         doubler.in[x_or_y][reg_idx] <== a[x_or_y][reg_idx];
+    //     }
+    // }
+    // result <== doubler.out[0][0] + doubler.out[0][1] + doubler.out[0][2] + doubler.out[0][3] + doubler.out[1][0] + doubler.out[1][1] + doubler.out[1][2] + doubler.out[1][3];
 
     // Signals
     signal input r[b][k];
@@ -449,6 +495,8 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         for (var j = 0; j < k; j++) {
             pubkey_coeff2[i].a[j] <== 0;
             pubkey_coeff2[i].b[j] <== pubkey_coeff1[i].out[j];
+            // pubkey_coeff2[i].a[j] <== pubkey_coeff1[i].out[j];
+            // pubkey_coeff2[i].b[j] <== 0;
             pubkey_coeff2[i].p[j] <== order[j];
         }
     }
@@ -508,5 +556,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     }
     component SumsEqual = IsZero();
     SumsEqual.in <== num_equal[k-1] - 2*k;
+    log(999);
+    log(SumsEqual.out);
     result <== SumsEqual.out;
 }

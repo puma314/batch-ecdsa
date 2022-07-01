@@ -365,8 +365,6 @@ describe('Secp256k1LinearCombination', function () {
   for (var idx = 0; idx < BATCH_SZ; idx++) {
     sum = sum.add(points[idx].multiply(coeffs[idx]))
   }
-  console.log("SUM")
-  console.log(sum)
   test_case.push([sum.x, sum.y])
   test_cases.push(test_case)
 
@@ -429,11 +427,11 @@ describe('Secp256k1LinearCombination', function () {
     // console.log(coeffs)
     // console.log(points_x_and_y)
     // console.log(sum_x_and_y)
-    console.log(JSON.stringify(
-    {
-      coeffs: coeffs.map((coeff: any) => bigint_to_array(64, 4, coeff)),
-      points: points_x_and_y.map((point_x_and_y: any) => [bigint_to_array(64, 4, point_x_and_y[0]), bigint_to_array(64, 4, point_x_and_y[1])])
-    }))
+    // console.log(JSON.stringify(
+    // {
+    //   coeffs: coeffs.map((coeff: any) => bigint_to_array(64, 4, coeff)),
+    //   points: points_x_and_y.map((point_x_and_y: any) => [bigint_to_array(64, 4, point_x_and_y[0]), bigint_to_array(64, 4, point_x_and_y[1])])
+    // }))
 
     // console.log(sumx_array);
     // console.log(sumy_array);
@@ -447,10 +445,10 @@ describe('Secp256k1LinearCombination', function () {
       });
       fs.writeFileSync('LinearCombinerWitness.json', JSON.stringify(witness));
       let {out, aux1, aux2, aux2Scalar, normalizedPoint} = interpretWitness(witness)
-      console.log('out')
-      console.log(out)
-      console.log("Expected sum")
-      console.log(test_case[2])
+      // console.log('out')
+      // console.log(out)
+      // console.log("Expected sum")
+      // console.log(test_case[2])
       expect(out.x).to.equal(test_case[2][0])
       expect(out.y).to.equal(test_case[2][1])
 
