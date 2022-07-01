@@ -1,14 +1,12 @@
-pragma circom 2.0.2;
+pragma circom 2.0.4;
 
 include "../node_modules/circomlib/circuits/poseidon.circom";
-
 include "circom-ecdsa/circuits/bigint.circom";
 include "circom-ecdsa/circuits/secp256k1.circom";
 include "circom-ecdsa/circuits/bigint_func.circom";
 include "circom-ecdsa/circuits/ecdsa_func.circom";
 include "circom-ecdsa/circuits/ecdsa.circom";
 include "circom-ecdsa/circuits/secp256k1_func.circom";
-
 include "bigint_ext.circom";
 
 /* Doubles an elliptic curve point w times */
@@ -341,7 +339,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     signal TPowersBits[b][k];
     component tToBigInt;
     component TPowersBigMult[b-2];
-    tToBigInt = ConvertBigInt(n, k); // TODO: do range checks
+    tToBigInt = ConvertBigInt(n, k);
     tToBigInt.in <== t;
     for (var i=0; i < b; i++) {
         if (i == 0) {
@@ -464,12 +462,6 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
-    var one[4];
-    one[0] = 1;
-    one[1] = 0;
-    one[2] = 0;
-    one[3] = 0;
-
     // \sum_i t^i (R_i - (r_i s_i^{-1}) Q_i)
     component linear_combiner = Secp256k1LinearCombination(n, k, 2 * b);
     for (var batch_idx = 0; batch_idx < b; batch_idx++) {
@@ -498,7 +490,6 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
             compare[x_or_y][reg_idx] = IsEqual();
             compare[x_or_y][reg_idx].in[0] <== linear_combiner.out[x_or_y][reg_idx];
             compare[x_or_y][reg_idx].in[1] <== generator_term.pubkey[x_or_y][reg_idx];
-            log(compare[x_or_y][reg_idx].out);
         }
         if (reg_idx == 0) {
             num_equal[0] <== compare[0][reg_idx].out + compare[1][reg_idx].out;
