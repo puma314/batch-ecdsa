@@ -490,7 +490,6 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
             compare[x_or_y][reg_idx] = IsEqual();
             compare[x_or_y][reg_idx].in[0] <== linear_combiner.out[x_or_y][reg_idx];
             compare[x_or_y][reg_idx].in[1] <== generator_term.pubkey[x_or_y][reg_idx];
-            log(compare[x_or_y][reg_idx].out);
         }
         if (reg_idx == 0) {
             num_equal[0] <== compare[0][reg_idx].out + compare[1][reg_idx].out;

@@ -24,7 +24,7 @@ template ConvertBigInt(n,k) {
         }
     }
     // Constraint to check that t = sum_i tBits[i] * 2^(n*i)
-    sumOut[k-1] === in + 1;
+    sumOut[k-1] === in;
 }
 
 template BigAddModP(n, k){
