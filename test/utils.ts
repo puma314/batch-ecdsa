@@ -1,6 +1,10 @@
 import { sign, Point, CURVE } from '@noble/secp256k1';
 import _ from 'lodash';
+import path = require('path');
 const fs = require('fs');
+const circom_tester = require('circom_tester');
+import { expect, assert } from 'chai';
+const wasm_tester = circom_tester.c;
 const F1Field = require('ffjavascript').F1Field;
 const Scalar = require('ffjavascript').Scalar;
 exports.p = Scalar.fromString(
@@ -266,3 +270,20 @@ var batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128];
 for (var i = 0; i < batch_sizes.length; i++) {
   generate_input_json(batch_sizes[i]);
 }
+
+describe('bruha', function () {
+  this.timeout(1000 * 1000);
+
+  let circuit: any;
+  before(async function () {
+    circuit = await wasm_tester(path.join(__dirname, 'circuits', 'test_batch_ecdsa_verify_2.circom'));
+  });
+
+  it('Testing sig', async function() {
+      var res = 1n;
+      var input = JSON.parse(fs.readFileSync("input_2.json"));
+      let witness = await circuit.calculateWitness(input);
+      expect(witness[1]).to.equal(res);
+      await circuit.checkConstraints(witness);
+  })
+});
