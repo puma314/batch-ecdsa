@@ -1,4 +1,4 @@
-pragma circom 2.0.2;
+pragma circom 2.0.5;
 
 include "../../circuits/batch_ecdsa.circom";
 

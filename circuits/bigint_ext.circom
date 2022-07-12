@@ -1,4 +1,4 @@
-pragma circom 2.0.2;
+pragma circom 2.0.5;
 
 // Given an input `in`, converts to a BigInt of k registers of n-bits
 template ConvertBigInt(n,k) {

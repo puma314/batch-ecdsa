@@ -1,4 +1,4 @@
-pragma circom 2.0.4;
+pragma circom 2.0.5;
 
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "circom-ecdsa/circuits/bigint.circom";
@@ -370,6 +370,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
     signal input msghash[b][k];
     signal input pubkey[b][2][k];
     signal output result;
+
 
     // Variables
     var p[100] = get_secp256k1_prime(n, k);
