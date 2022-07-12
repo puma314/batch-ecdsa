@@ -1,4 +1,0 @@
-yarn run v1.22.19
-$ cd ./scripts/batch_ecdsa && ./fast_build.sh 64
-****COMPILING CIRCUIT****
-[32mtemplate instances[0m: 147

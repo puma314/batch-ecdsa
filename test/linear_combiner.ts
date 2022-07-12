@@ -80,9 +80,6 @@ function invert(number: bigint, modulo: bigint = CURVE.P): bigint {
   return mod(x, modulo);
 }
 
-
-// console.log(witness)
-
 export function interpretWitness(witness: string[]) {
     var out
     var aux1
@@ -93,7 +90,7 @@ export function interpretWitness(witness: string[]) {
     let k = 4
     let n = 64
 
-    let outarr = []
+    let outarr: any = []
     for (var j = 0; j < 2; j++) {
         let inter = BigInt(0)
         for (var i = 0; i < k; i++) {
@@ -104,7 +101,7 @@ export function interpretWitness(witness: string[]) {
     }
     out = new Point(outarr[0], outarr[1])
 
-    let aux1arr = []
+    let aux1arr: any = []
     for (var j = 0; j < 2; j++) {
         let inter = BigInt(0)
         for (var i = 0; i < k; i++) {
@@ -116,11 +113,10 @@ export function interpretWitness(witness: string[]) {
     aux1 = new Point(aux1arr[0], aux1arr[1])
 
 
-    let aux2arr = []
+    let aux2arr: any = []
     for (var j = 0; j < 2; j++) {
         let inter = BigInt(0)
         for (var i = 0; i < k; i++) {
-            console.log(witness[index])
             inter += BigInt(witness[index]) * BigInt(2**(n*i))
             index += 1
         }
@@ -133,36 +129,3 @@ export function interpretWitness(witness: string[]) {
     let normalizedPoint = out.subtract(aux1.add(aux2.multiply(aux2Scalar)))
     return {out, aux1, aux2, aux2Scalar, normalizedPoint}
 }
-
-/*
-console.log("START OF Output from linearCombiner.ts")
-let witness = JSON.parse(fs.readFileSync('LinearCombinerWitness.json', 'utf-8'))
-let {out, aux1, aux2, aux2Scalar, normalizedPoint} = interpretWitness(witness)
-console.log('out')
-console.log(out)
-console.log('aux1')
-console.log(aux1)
-console.log('aux2')
-console.log(aux2)
-console.log('aux2 scalar')
-console.log(aux2Scalar)
-console.log(normalizedPoint)
-
-
-var privkeys: Array<bigint> = [1n, 2n];
-var points: Array<Point> = [];
-for (var idx = 0; idx < 2; idx++) {
-    var point: Point = Point.fromPrivateKey(privkeys[idx]);
-    points.push(point);
-}
-
-var coeffs: Array<bigint> = [];
-for (var idx = 0; idx < 2; idx++) {
-    var coeff = BigInt(idx + 1);
-    coeffs.push(coeff);
-}
-
-console.log("Expected answer")
-console.log(points[0].add(points[1]))
-console.log("END OF output from linearCombiner.ts")
-*/
