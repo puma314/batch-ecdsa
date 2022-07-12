@@ -1,6 +1,6 @@
 # batch-ecdsa
 
-Implementation of batch ECDSA verification in circom.
+Implementation of batch ECDSA verification in circom. **Warning** this code is highly experimental and unaudited. Please use at your own risk.
 
 ## Project overview
 
