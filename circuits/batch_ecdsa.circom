@@ -1,4 +1,4 @@
-pragma circom 2.0.5;
+pragma circom 2.0.4;
 
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "circom-ecdsa/circuits/bigint.circom";
@@ -232,9 +232,7 @@ template Secp256k1LinearCombination(n, k, b) {
     component doublers[num_coordinates];
     component adders[num_coordinates][b-1];
     component are_points_equal[num_coordinates][b-1];
-    component final_adder[num_coordinates];
-    component debug[num_coordinates];
-    component debug2[2][num_coordinates];
+    component final_adder[num_coordinates-1];
 
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
         // If this is not the first coordinate, double the accumulator from the last iteration
@@ -267,7 +265,7 @@ template Secp256k1LinearCombination(n, k, b) {
             }
 
             // Compute the prev partial sum + current multiplexer output (note: not always used)
-            adders[coord_idx][batch_idx-1] = Secp256k1AddUnequalNoCheck(n, k);
+            adders[coord_idx][batch_idx-1] = Secp256k1AddUnequal(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     adders[coord_idx][batch_idx-1].a[x_or_y][reg_idx] <==
@@ -304,7 +302,6 @@ template Secp256k1LinearCombination(n, k, b) {
 
         // If this is the first round, set the accumulator to the partial sum
         // We do not check has_prev_coordinate_nonzero
-        final_adder[coord_idx] = Secp256k1AddUnequalNoCheck(n, k);
         if (coord_idx == num_coordinates - 1) {
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
@@ -314,39 +311,13 @@ template Secp256k1LinearCombination(n, k, b) {
                 }
             }
         } else {
-            debug[coord_idx] = Secp256k1IsEqual(n, k);
-            // debug2[0][coord_idx] = Secp256k1PointOnCurve(n, k);
-            // debug2[1][coord_idx] = Secp256k1PointOnCurve(n, k);
-
-
-            log(111);
-            log(coord_idx);
+            final_adder[coord_idx] = Secp256k1AddUnequal(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     final_adder[coord_idx].a[x_or_y][reg_idx] <== doublers[coord_idx].out[x_or_y][reg_idx];
                     final_adder[coord_idx].b[x_or_y][reg_idx] <== partial[coord_idx][b-1][x_or_y][reg_idx];
-                    debug[coord_idx].a[x_or_y][reg_idx] <== doublers[coord_idx].out[x_or_y][reg_idx];
-                    debug[coord_idx].b[x_or_y][reg_idx] <== partial[coord_idx][b-1][x_or_y][reg_idx];
-                    log(reg_idx);
-                    log(x_or_y);
-                    log(doublers[coord_idx].out[x_or_y][reg_idx]);
-                    log(partial[coord_idx][b-1][x_or_y][reg_idx]);
                 }
             }
-
-            // for (var reg_idx = 0; reg_idx < k; reg_idx++) {
-            //     debug2[0].x[reg_idx] <== doublers[coord_idx].out[0][reg_idx];
-            //     debug2[0].y[reg_idx] <== doublers[coord_idx].out[1][reg_idx];
-
-            //     debug2[1].x[reg_idx] <== partial[coord_idx][b-1][0][reg_idx];
-            //     debug2[1].x[reg_idx] <== partial[coord_idx][b-1][1][reg_idx];
-            // }
-            // log111);
-            // log(debug[coord_idx].out);
-            // log(222);
-            // log(debug2[0][coord_idx].out);
-            // log(333);
-            // log(debug2[1][coord_idx].out);
 
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
