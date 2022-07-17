@@ -35,21 +35,19 @@ These commands will run inside a `build/batch_ecdsa` directory at the top level 
 
 ## Benchmarks
 
-### TODO 
+All benchmarks were run on a 32-core 250GB RAM machine.
 
-All benchmarks were run on a 16-core 3.0GHz, 32G RAM machine (AWS c5.4xlarge instance).
-
-|                                      | yarn build:c | yarn build:wasm |
-| ------------------------------------ | --------- | -------- | 
-| Constraints                          | x     | x |
-| Circuit compilation                  | x       | x   | 
-| Witness generation                   | x       | x    | 
-| Trusted setup phase 2 key generation | x       | x   | 
-| Trusted setup phase 2 contribution   | x      | x    | 
-| Proving key size                     | x    | x    |
-| Proving key verification             | x     | x   | 
-| Proving time                         | x       | x  | 
-| Proof verification time              | x       | x   | 
+|                                      | verify2 | verify4 | verify8  | verify16  | verify32 |
+|--------------------------------------|---------|---------|----------|-----------|----------|
+| Constraints                          | 1.9M    | 2.8M    | 4.6M     | 8.1M      | 15.3M    |
+| Circuit compilation                  | 162s    | 186s    | 345s     | 579s      | 1101s    |
+| Witness generation                   | 44s     | 68s     | 130s     | 211s      | 436s     |
+| Trusted setup phase 2 key generation | 641s    | 923s    | 1485s    | 2715s     | 5352s    |
+| Trusted setup phase 2 contribution   | 120s    | 196s    | 366s     | 498s      | 987s     |
+| Proving key size                     | 1.1GB   | 1.8GB   | 2.9GB    | 4.8GB     | 9.0GB    |
+| Proving key verification             | 709s    | 1050s   | 1769s    | 3198s     | 6450s    |
+| Proving time                         | 4s      | 7s      | 14s      | 40s       | 86s      |
+| Proof verification time              | 1s      | 1s      | 1s       | 1s        | 1s       |
 
 ## Testing
 
