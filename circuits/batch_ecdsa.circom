@@ -1,4 +1,4 @@
-pragma circom 2.0.3;
+pragma circom 2.0.4;
 
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "circom-ecdsa/circuits/bigint.circom";
@@ -8,6 +8,37 @@ include "circom-ecdsa/circuits/ecdsa_func.circom";
 include "circom-ecdsa/circuits/ecdsa.circom";
 include "circom-ecdsa/circuits/secp256k1_func.circom";
 include "bigint_ext.circom";
+
+template Secp256k1IsEqual(n, k) {
+    signal input a[2][k];
+    signal input b[2][k];
+    signal output out;
+
+    component are_registers_equal[2][k];
+    component all_registers_equal = IsEqual();
+
+    for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+        for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+            are_registers_equal[x_or_y][reg_idx] = IsEqual();
+            are_registers_equal[x_or_y][reg_idx].in[0] <== a[x_or_y][reg_idx];
+            are_registers_equal[x_or_y][reg_idx].in[1] <== b[x_or_y][reg_idx];
+        }
+    }
+
+    signal acc[2*k];
+    acc[0] <== are_registers_equal[0][0].out;
+    acc[1] <== acc[0] + are_registers_equal[0][1].out;
+    acc[2] <== acc[1] + are_registers_equal[0][2].out;
+    acc[3] <== acc[2] + are_registers_equal[0][3].out;
+    acc[4] <== acc[3] + are_registers_equal[1][0].out;
+    acc[5] <== acc[4] + are_registers_equal[1][1].out;
+    acc[6] <== acc[5] + are_registers_equal[1][2].out;
+    acc[7] <== acc[6] + are_registers_equal[1][3].out;
+
+    all_registers_equal.in[0] <== acc[2*k-1];
+    all_registers_equal.in[1] <== 2 * k;
+    out <== all_registers_equal.out;
+}
 
 /* Doubles an elliptic curve point w times */
 template Secp256k1DoubleRepeat(n, k, w) {
@@ -21,8 +52,15 @@ template Secp256k1DoubleRepeat(n, k, w) {
         doubler[0].in[1][j] <== in[1][j];
     }
 
+
+    component point_on_curve[w];
     for (var i = 1; i < w; i++) {
         doubler[i] = Secp256k1Double(n, k);
+        point_on_curve[i] = Secp256k1PointOnCurve();
+        for(var j = 0; j < k; j++){
+            point_on_curve[i].x[j] <== doubler[i-1].out[0][j];
+            point_on_curve[i].y[j] <== doubler[i-1].out[1][j];
+        }
         for (var j = 0; j < k; j++) {
             doubler[i].in[0][j] <== doubler[i-1].out[0][j];
             doubler[i].in[1][j] <== doubler[i-1].out[1][j];
@@ -56,6 +94,17 @@ template Secp256k1LinearCombination(n, k, b) {
     var dummy[2][k];
     for (var i = 0; i < k; i++) dummy[0][i] = dummyHolder[0][i];
     for (var i = 0; i < k; i++) dummy[1][i] = dummyHolder[1][i];
+
+    var dummy2[2][k];
+    dummy2[0][0] = 7302857710491818226;
+    dummy2[0][1] = 13090816099812022951;
+    dummy2[0][2] = 9346046874093976485;
+    dummy2[0][3] = 16390367348011359441;
+
+    dummy2[1][0] = 3244438850366025804;
+    dummy2[1][1] = 9434351362574893148;
+    dummy2[1][2] = 7254847369327388665;
+    dummy2[1][3] = 7867482507585870065;
 
     // Generating lookup table for points[0], ..., points[b-1] between multiples 0 and 2^w-1
     signal lookup_table[b][window_size][2][k];
@@ -186,7 +235,9 @@ template Secp256k1LinearCombination(n, k, b) {
     signal partial[num_coordinates][b][2][k];
     component doublers[num_coordinates];
     component adders[num_coordinates][b-1];
-    component final_adder[num_coordinates];
+    component are_points_equal[num_coordinates][b-1];
+    component final_adder[num_coordinates-1];
+
     for (var coord_idx = num_coordinates - 1; coord_idx >= 0; coord_idx--) {
         // If this is not the first coordinate, double the accumulator from the last iteration
         if (coord_idx != num_coordinates - 1) {
@@ -207,12 +258,23 @@ template Secp256k1LinearCombination(n, k, b) {
 
         // Compute the remaining partial sums
         for (var batch_idx = 1; batch_idx < b; batch_idx++) {
+            are_points_equal[coord_idx][batch_idx-1] = Secp256k1IsEqual(n, k);
+            for (var reg_idx = 0; reg_idx < k; reg_idx++) {
+                for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
+                    are_points_equal[coord_idx][batch_idx-1].a[x_or_y][reg_idx] <==
+                        partial[coord_idx][batch_idx-1][x_or_y][reg_idx];
+                    are_points_equal[coord_idx][batch_idx-1].b[x_or_y][reg_idx] <==
+                        multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
+                }
+            }
+
             // Compute the prev partial sum + current multiplexer output (note: not always used)
             adders[coord_idx][batch_idx-1] = Secp256k1AddUnequal(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     adders[coord_idx][batch_idx-1].a[x_or_y][reg_idx] <==
-                        partial[coord_idx][batch_idx-1][x_or_y][reg_idx];
+                        are_points_equal[coord_idx][batch_idx-1].out * (dummy2[x_or_y][reg_idx] - partial[coord_idx][batch_idx-1][x_or_y][reg_idx])
+                        + partial[coord_idx][batch_idx-1][x_or_y][reg_idx];
                     adders[coord_idx][batch_idx-1].b[x_or_y][reg_idx] <==
                         multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
                 }
@@ -225,10 +287,14 @@ template Secp256k1LinearCombination(n, k, b) {
                     intermed1[coord_idx][batch_idx-1][x_or_y][reg_idx] <==
                         iszero[batch_idx][coord_idx].out * (partial[coord_idx][batch_idx-1][x_or_y][reg_idx] - adders[coord_idx][batch_idx-1].out[x_or_y][reg_idx])
                         + adders[coord_idx][batch_idx-1].out[x_or_y][reg_idx];
+
+
+                    // IF THERE WAS NO PREV NON ZERO SELECTOR => partial = 0
+                    // IF THERE WAS NO PREV NON ZERO SELECTOR => partial = dummy
                     // Case 2: there is not prev non-zero selector
                     intermed2[coord_idx][batch_idx-1][x_or_y][reg_idx] <==
-                        multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx]
-                        - iszero[batch_idx][coord_idx].out * multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
+                        iszero[batch_idx][coord_idx].out * (dummy[x_or_y][reg_idx] - multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx])
+                        + multiplexers[batch_idx][coord_idx][x_or_y].out[reg_idx];
                     // If there was prev non-zero selector, set partial to intermed1. otherwise, intermed2
                     partial[coord_idx][batch_idx][x_or_y][reg_idx] <==
                         has_prev_nonzero[batch_idx-1][coord_idx].out
@@ -240,7 +306,6 @@ template Secp256k1LinearCombination(n, k, b) {
 
         // If this is the first round, set the accumulator to the partial sum
         // We do not check has_prev_coordinate_nonzero
-        final_adder[coord_idx] = Secp256k1AddUnequal(n, k);
         if (coord_idx == num_coordinates - 1) {
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
@@ -250,12 +315,14 @@ template Secp256k1LinearCombination(n, k, b) {
                 }
             }
         } else {
+            final_adder[coord_idx] = Secp256k1AddUnequal(n, k);
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     final_adder[coord_idx].a[x_or_y][reg_idx] <== doublers[coord_idx].out[x_or_y][reg_idx];
                     final_adder[coord_idx].b[x_or_y][reg_idx] <== partial[coord_idx][b-1][x_or_y][reg_idx];
                 }
             }
+
             for (var reg_idx = 0; reg_idx < k; reg_idx++) {
                 for (var x_or_y = 0; x_or_y < 2; x_or_y++) {
                     /*
@@ -334,6 +401,7 @@ template BatchECDSAVerifyNoPubkeyCheck(n, k, b) {
         }
     }
 
+    // Compute powers of t
     signal t;
     t <== MultiHasher[b-1][k-1].out;
     signal TPowersBits[b][k];

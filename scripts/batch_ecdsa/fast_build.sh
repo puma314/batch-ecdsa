@@ -29,11 +29,11 @@ start=`date +%s`
 end=`date +%s`
 echo "DONE ($((end-start))s)"
 
-echo "****Converting witness to json****"
-start=`date +%s`
-$NODE_PATH $SNARKJS_PATH wej "$OUTPUT_DIR"/witness.wtns "$OUTPUT_DIR"/witness.json
-end=`date +%s`
-echo "DONE ($((end-start))s)"
+# echo "****Converting witness to json****"
+# start=`date +%s`
+# $NODE_PATH $SNARKJS_PATH wej "$OUTPUT_DIR"/witness.wtns "$OUTPUT_DIR"/witness.json
+# end=`date +%s`
+# echo "DONE ($((end-start))s)"
 
 echo "****GENERATING ZKEY 0****"
 start=`date +%s`
