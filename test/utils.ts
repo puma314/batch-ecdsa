@@ -1,6 +1,10 @@
 import { sign, Point, CURVE } from '@noble/secp256k1';
 import _ from 'lodash';
+import path = require('path');
 const fs = require('fs');
+const circom_tester = require('circom_tester');
+import { expect, assert } from 'chai';
+const wasm_tester = circom_tester.c;
 const F1Field = require('ffjavascript').F1Field;
 const Scalar = require('ffjavascript').Scalar;
 exports.p = Scalar.fromString(
@@ -258,7 +262,7 @@ function generate_input_json(n: number) {
       pubkey: _.map(collated_batch, (e: any) => e[4]),
     };
 
-    fs.writeFileSync("input_" + n + ".json", JSON.stringify(input));
+    fs.writeFileSync(path.join(__dirname, "input_" + n + ".json"), JSON.stringify(input));
   });
 }
 
