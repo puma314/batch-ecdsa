@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build:c": "cd ./scripts/batch_ecdsa && ./fast_build.sh",
+    "build:cnaive": "cd ./scripts/batch_ecdsa && ./fast_build_naive.sh",
     "build:wasm": "cd ./scripts/batch_ecdsa && ./wasm_build.sh",
     "test": "NODE_OPTIONS=--max_old_space_size=56000 mocha -r ts-node/register 'test/**/*.ts'"
   },
